@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useState } from 'react';
+import React, { Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Stage, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
@@ -26,44 +26,13 @@ const SceneModel: React.FC<ModelProps> = ({ url, position, scale, rotation = [0,
   return <primitive object={model} position={position} scale={scale} rotation={rotation} />;
 };
 
-const MODEL_SEQUENCE = [
-  {
-    label: 'Digital Camera',
-    url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/Cameras/glTF/Cameras.gltf',
-    scale: 1.6,
-    rotation: [0, 0.65, 0] as [number, number, number],
-  },
-  {
-    label: 'Cycle',
-    url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/ToyCar/glTF-Binary/ToyCar.glb',
-    scale: 1.1,
-    rotation: [0, 0.45, 0] as [number, number, number],
-  },
-  {
-    label: 'Laptop',
-    url: 'https://raw.githubusercontent.com/Smit-Prajapati/prajapatismit/b5f434ae4d45d10fe1664d5606ad28e4d9c739af/images/laptop.glb',
-    scale: 1.45,
-    rotation: [0, -0.55, 0] as [number, number, number],
-  },
-  {
-    label: 'Table Fan',
-    url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/LightsPunctualLamp/glTF-Binary/LightsPunctualLamp.glb',
-    scale: 1.9,
-    rotation: [0, -0.9, 0] as [number, number, number],
-  },
-];
+const LAPTOP_MODEL = {
+  url: 'https://raw.githubusercontent.com/Smit-Prajapati/prajapatismit/b5f434ae4d45d10fe1664d5606ad28e4d9c739af/images/laptop.glb',
+  scale: 1.45,
+  rotation: [0, -0.55, 0] as [number, number, number],
+};
 
 const SmarterWay: React.FC = () => {
-  const [modelIndex, setModelIndex] = useState(0);
-  const activeModel = MODEL_SEQUENCE[modelIndex];
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setModelIndex((prev) => (prev + 1) % MODEL_SEQUENCE.length);
-    }, 3200);
-    return () => window.clearInterval(timer);
-  }, []);
-
   return (
     <section className="py-24 bg-white overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -110,11 +79,10 @@ const SmarterWay: React.FC = () => {
               <Suspense fallback={null}>
                 <Stage intensity={0.4} environment="city" shadows={false} adjustCamera={false}>
                   <SceneModel
-                    key={activeModel.url}
-                    url={activeModel.url}
+                    url={LAPTOP_MODEL.url}
                     position={[0, -1, 0]}
-                    scale={activeModel.scale}
-                    rotation={activeModel.rotation}
+                    scale={LAPTOP_MODEL.scale}
+                    rotation={LAPTOP_MODEL.rotation}
                   />
                 </Stage>
               </Suspense>
@@ -128,6 +96,6 @@ const SmarterWay: React.FC = () => {
   );
 };
 
-MODEL_SEQUENCE.forEach((item) => useGLTF.preload(item.url));
+useGLTF.preload(LAPTOP_MODEL.url);
 
 export default SmarterWay;

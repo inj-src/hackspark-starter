@@ -6,7 +6,7 @@ import type { FAQItem } from '../types';
 const faqs: FAQItem[] = [
   { id: '1', question: 'How does the deposit system work?', answer: 'When you rent an item, a hold is placed on your card for the deposit amount. Once the item is returned in the same condition, the hold is released immediately. If you have a high Trust Score, your required deposit amount is significantly reduced.' },
   { id: '2', question: 'What happens if an item gets damaged?', answer: 'RentPi offers optional damage protection for a small fee during checkout. If you decline it and the item is damaged, the repair or replacement cost will be deducted from your deposit or charged to your account.' },
-  { id: '3', question: 'How do I earn and use RentPi credits?', answer: 'You earn credits whenever someone rents your listed items. These credits are stored in your wallet and can be used to rent items from others on the platform. 1 Credit is equivalent to $1.' },
+  { id: '3', question: 'How do I earn and use RentPi credits?', answer: 'You earn credits whenever someone rents your listed items. These credits are stored in your wallet and can be used to rent items from others on the platform. 1 Credit is equivalent to ৳1.' },
   { id: '4', question: 'Is it safe to meet up with strangers?', answer: 'Safety is our top priority. We require ID verification for all users. We recommend meeting in well-lit, public locations for handoffs, or using our suggested "Safe Exchange Zones" available in many cities.' },
   { id: '5', question: 'Can I cancel a booking?', answer: 'Yes. Cancellations made 48 hours before the rental period are fully refunded. Cancellations within 48 hours may be subject to a small cancellation fee to compensate the owner for reserving the dates.' }
 ];

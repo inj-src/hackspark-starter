@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { X, Send, Plus, Trash2 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -24,7 +24,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ onClose }) => {
   const queryClient = useQueryClient();
   const [inputValue, setInputValue] = useState('');
   const [activeSessionId, setActiveSessionId] = useState<string>(createSessionId());
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [localMessagesBySession, setLocalMessagesBySession] = useState<Record<string, ChatMessage[]>>({});
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const sessionsQuery = useQuery({
@@ -32,36 +32,29 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ onClose }) => {
     queryFn: fetchSessions,
   });
 
-  useEffect(() => {
-    if (!sessionsQuery.data?.sessions?.length) return;
-    setActiveSessionId((current) => {
-      const exists = sessionsQuery.data.sessions.some((s) => s.sessionId === current);
-      return exists ? current : sessionsQuery.data!.sessions[0].sessionId;
-    });
-  }, [sessionsQuery.data]);
+  const sessions = useMemo(() => sessionsQuery.data?.sessions ?? [], [sessionsQuery.data]);
+  const resolvedSessionId = useMemo(() => {
+    if (sessions.some((s) => s.sessionId === activeSessionId)) return activeSessionId;
+    return sessions[0]?.sessionId ?? activeSessionId;
+  }, [activeSessionId, sessions]);
 
   const historyQuery = useQuery({
-    queryKey: ['chat-history', activeSessionId],
-    queryFn: () => fetchSessionHistory(activeSessionId),
-    enabled: Boolean(activeSessionId),
+    queryKey: ['chat-history', resolvedSessionId],
+    queryFn: () => fetchSessionHistory(resolvedSessionId),
+    enabled: Boolean(resolvedSessionId),
     retry: false,
   });
-
-  useEffect(() => {
-    if (historyQuery.data?.messages) {
-      setMessages(historyQuery.data.messages);
-    } else if (historyQuery.isError) {
-      setMessages([]);
-    }
-  }, [historyQuery.data, historyQuery.isError]);
 
   const sendMutation = useMutation({
     mutationFn: sendChatMessage,
     onSuccess: ({ reply }) => {
       const now = new Date().toISOString();
-      setMessages((current) => [...current, { role: 'assistant', content: reply, timestamp: now }]);
+      setLocalMessagesBySession((current) => {
+        const existing = current[resolvedSessionId] ?? historyQuery.data?.messages ?? [];
+        return { ...current, [resolvedSessionId]: [...existing, { role: 'assistant', content: reply, timestamp: now }] };
+      });
       queryClient.invalidateQueries({ queryKey: ['chat-sessions'] });
-      queryClient.invalidateQueries({ queryKey: ['chat-history', activeSessionId] });
+      queryClient.invalidateQueries({ queryKey: ['chat-history', resolvedSessionId] });
     },
     onError: (error) => {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to send message');
@@ -72,14 +65,22 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ onClose }) => {
     mutationFn: deleteSession,
     onSuccess: (_, sessionId) => {
       queryClient.invalidateQueries({ queryKey: ['chat-sessions'] });
-      if (activeSessionId === sessionId) {
-        setMessages([]);
+      if (resolvedSessionId === sessionId) {
         setActiveSessionId(createSessionId());
       }
+      setLocalMessagesBySession((current) => {
+        if (!current[sessionId]) return current;
+        const next = { ...current };
+        delete next[sessionId];
+        return next;
+      });
     },
   });
 
-  const sessions = useMemo(() => sessionsQuery.data?.sessions ?? [], [sessionsQuery.data]);
+  const messages = useMemo(() => {
+    if (historyQuery.isError) return [];
+    return localMessagesBySession[resolvedSessionId] ?? historyQuery.data?.messages ?? [];
+  }, [historyQuery.data?.messages, historyQuery.isError, localMessagesBySession, resolvedSessionId]);
 
   const handleSend = (event: React.FormEvent) => {
     event.preventDefault();
@@ -90,13 +91,15 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ onClose }) => {
     setInputValue('');
 
     const now = new Date().toISOString();
-    setMessages((current) => [...current, { role: 'user', content: text, timestamp: now }]);
-    sendMutation.mutate({ sessionId: activeSessionId, message: text });
+    setLocalMessagesBySession((current) => {
+      const existing = current[resolvedSessionId] ?? historyQuery.data?.messages ?? [];
+      return { ...current, [resolvedSessionId]: [...existing, { role: 'user', content: text, timestamp: now }] };
+    });
+    sendMutation.mutate({ sessionId: resolvedSessionId, message: text });
   };
 
   const handleNewChat = () => {
     setErrorMessage(null);
-    setMessages([]);
     setInputValue('');
     setActiveSessionId(createSessionId());
   };
@@ -127,7 +130,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ onClose }) => {
             <div
               key={session.sessionId}
               className={`group rounded-lg p-2 cursor-pointer border ${
-                session.sessionId === activeSessionId
+                session.sessionId === resolvedSessionId
                   ? 'border-green-500 bg-green-50 dark:bg-slate-800'
                   : 'border-transparent hover:border-slate-200 dark:hover:border-slate-700'
               }`}

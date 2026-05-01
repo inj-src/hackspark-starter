@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import PageTransition from '../components/PageTransition';
@@ -37,7 +37,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) {
-    let payload: ErrorResponse | null = null;
+    let payload: ErrorResponse | null;
     try {
       payload = (await res.json()) as ErrorResponse;
     } catch {
@@ -59,16 +59,7 @@ const Products: React.FC = () => {
   const [searchText, setSearchText] = useState(searchTextFromUrl);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
-
-  useEffect(() => {
-    setCategory(categoryFromUrl);
-    setPage(1);
-  }, [categoryFromUrl]);
-
-  useEffect(() => {
-    setSearchText(searchTextFromUrl);
-    setPage(1);
-  }, [searchTextFromUrl]);
+  const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
 
   const productsQuery = useQuery({
     queryKey: ['rent-products', category, page, limit],
@@ -81,8 +72,13 @@ const Products: React.FC = () => {
     },
     placeholderData: (prev) => prev,
   });
+  const productDetailsQuery = useQuery({
+    queryKey: ['product-details', selectedProductId],
+    queryFn: () => fetchJson<ApiProduct>(`${API_BASE_URL}/rentals/products/${selectedProductId}`),
+    enabled: selectedProductId !== null,
+  });
 
-  const products = productsQuery.data?.data ?? [];
+  const products = useMemo(() => productsQuery.data?.data ?? [], [productsQuery.data]);
   const totalPages = productsQuery.data?.totalPages ?? 0;
   const filteredProducts = useMemo(() => {
     const q = searchText.trim().toLowerCase();
@@ -213,7 +209,11 @@ const Products: React.FC = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredProducts.map((product) => (
-              <article key={product.id} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
+              <article
+                key={product.id}
+                className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => setSelectedProductId(product.id)}
+              >
                 <div className="flex items-start justify-between gap-3">
                   <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{product.name}</h2>
                   <span className="text-xs px-2 py-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200">
@@ -221,7 +221,7 @@ const Products: React.FC = () => {
                   </span>
                 </div>
                 <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">Owner #{product.ownerId}</p>
-                <p className="mt-1 text-base font-semibold text-emerald-700 dark:text-emerald-400">${product.pricePerDay.toFixed(2)} / day</p>
+                <p className="mt-1 text-base font-semibold text-emerald-700 dark:text-emerald-400">৳{product.pricePerDay.toFixed(2)} / day</p>
                 {canCheckAvailability && (
                   <p className="mt-2 text-sm text-slate-700 dark:text-slate-200">
                     {availabilityByProductId.get(product.id)?.available
@@ -256,6 +256,56 @@ const Products: React.FC = () => {
           </div>
         </div>
       </section>
+
+      {selectedProductId !== null && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-4"
+          onClick={() => setSelectedProductId(null)}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <h3 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Product Details</h3>
+              <button
+                onClick={() => setSelectedProductId(null)}
+                className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+              >
+                ✕
+              </button>
+            </div>
+
+            {productDetailsQuery.isLoading && (
+              <p className="mt-4 text-slate-600 dark:text-slate-300">Loading details...</p>
+            )}
+            {productDetailsQuery.isError && (
+              <p className="mt-4 text-red-700">Failed to load product details.</p>
+            )}
+            {productDetailsQuery.data && (
+              <div className="mt-5 space-y-2 text-slate-800 dark:text-slate-100">
+                <p><strong>ID:</strong> {productDetailsQuery.data.id}</p>
+                <p><strong>Name:</strong> {productDetailsQuery.data.name}</p>
+                <p><strong>Category:</strong> {productDetailsQuery.data.category}</p>
+                <p><strong>Owner ID:</strong> {productDetailsQuery.data.ownerId}</p>
+                <p><strong>Price Per Day:</strong> ৳{productDetailsQuery.data.pricePerDay.toFixed(2)}</p>
+                {canCheckAvailability && (
+                  <p>
+                    <strong>Availability:</strong>{' '}
+                    {availabilityByProductId.get(productDetailsQuery.data.id)?.available
+                      ? `Available (${fromDate} to ${toDate})`
+                      : `Not available (${fromDate} to ${toDate})`}
+                  </p>
+                )}
+              </div>
+            )}
+
+            <button className="mt-6 w-full rounded-xl bg-green-600 hover:bg-green-700 text-white py-3 text-lg font-semibold">
+              Rent Now
+            </button>
+          </div>
+        </div>
+      )}
     </PageTransition>
   );
 };

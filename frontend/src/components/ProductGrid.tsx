@@ -119,7 +119,7 @@ const ProductGrid: React.FC = () => {
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
                 <div className="absolute top-3 right-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm px-3 py-1 rounded-full font-bold text-slate-900 dark:text-slate-100 shadow-sm text-sm">
-                  ${product.pricePerDay}<span className="text-gray-500 dark:text-slate-400 text-xs font-normal">/day</span>
+                  ৳{product.pricePerDay}<span className="text-gray-500 dark:text-slate-400 text-xs font-normal">/day</span>
                 </div>
                 <div className="absolute top-3 left-3 bg-slate-900/70 backdrop-blur-sm px-2 py-1 rounded-md text-white text-xs uppercase tracking-wider font-medium">
                   {product.category}
