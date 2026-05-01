@@ -206,7 +206,10 @@ analyticsRoute.get("/analytics/search", (c) => {
   if (!q) return c.json({ error: "query q is required" }, 400);
 
   const results = Array.from(getCache().productById.values())
-    .filter((p) => p.name.toLowerCase().includes(q))
+    .filter((p) => 
+      p.name.toLowerCase().includes(q) || 
+      p.category.toLowerCase().includes(q)
+    )
     .slice(0, 10);
 
   return c.json({ query: q, results });
