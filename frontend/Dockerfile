@@ -1,11 +1,11 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:20-alpine3.20 AS builder
+FROM node:22-alpine3.21 AS builder
 WORKDIR /app
 COPY . .
 
 RUN if [ -f package.json ]; then \
-      if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then npm ci; else npm install; fi; \
+      npm install; \
       npm run build; \
       if [ -d dist ]; then cp -R dist /app/out; \
       elif [ -d build ]; then cp -R build /app/out; \
