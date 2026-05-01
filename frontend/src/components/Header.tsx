@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useDispatch, useSelector } from 'react-redux';
 import { toggleTheme } from '../store/themeSlice';
 import type { RootState } from '../store';
+import { logout } from '../store/userSlice';
+import { clearStoredToken } from '../lib/auth';
 
 const navLink = (to: string, pathname: string) => {
   const isActive =
@@ -26,7 +28,13 @@ const Header: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const dispatch = useDispatch();
   const isDark = useSelector((state: RootState) => state.theme.isDark);
+  const isAuthenticated = useSelector((state: RootState) => state.user.isAuthenticated);
   const { pathname } = useLocation();
+  const handleLogout = () => {
+    clearStoredToken();
+    dispatch(logout());
+    setIsMenuOpen(false);
+  };
 
   return (
     <header className="sticky top-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shadow-sm border-b border-gray-100 dark:border-slate-800 transition-colors duration-300">
@@ -78,15 +86,26 @@ const Header: React.FC = () => {
               </AnimatePresence>
             </motion.button>
 
-            <Link to="/login">
+            {isAuthenticated ? (
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className={pathname === '/login' ? 'text-green-500 font-medium transition-colors px-3 py-2' : 'text-gray-600 dark:text-slate-300 hover:text-green-500 dark:hover:text-green-400 font-medium transition-colors px-3 py-2'}
+                onClick={handleLogout}
+                className="text-gray-600 dark:text-slate-300 hover:text-green-500 dark:hover:text-green-400 font-medium transition-colors px-3 py-2"
               >
-                Login
+                Logout
               </motion.button>
-            </Link>
+            ) : (
+              <Link to="/login">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className={pathname === '/login' ? 'text-green-500 font-medium transition-colors px-3 py-2' : 'text-gray-600 dark:text-slate-300 hover:text-green-500 dark:hover:text-green-400 font-medium transition-colors px-3 py-2'}
+                >
+                  Login
+                </motion.button>
+              </Link>
+            )}
           </div>
 
           <div className="md:hidden flex items-center gap-2">
@@ -131,7 +150,11 @@ const Header: React.FC = () => {
               <Link to="/rent" onClick={() => setIsMenuOpen(false)} className={mobileNavLink('/rent', pathname)}>Rent</Link>
               <Link to="/" onClick={() => setIsMenuOpen(false)} className={mobileNavLink('/', pathname)}>Community</Link>
               <div className="mt-3 flex flex-col gap-2 px-3">
-                <Link to="/login" onClick={() => setIsMenuOpen(false)} className={pathname === '/login' ? 'w-full text-center text-green-500 font-semibold py-2 border border-green-500 rounded-md' : 'w-full text-center text-gray-600 dark:text-slate-300 hover:text-green-500 font-medium py-2 border border-gray-200 dark:border-slate-700 rounded-md'}>Login</Link>
+                {isAuthenticated ? (
+                  <button onClick={handleLogout} className="w-full text-center text-gray-600 dark:text-slate-300 hover:text-green-500 font-medium py-2 border border-gray-200 dark:border-slate-700 rounded-md">Logout</button>
+                ) : (
+                  <Link to="/login" onClick={() => setIsMenuOpen(false)} className={pathname === '/login' ? 'w-full text-center text-green-500 font-semibold py-2 border border-green-500 rounded-md' : 'w-full text-center text-gray-600 dark:text-slate-300 hover:text-green-500 font-medium py-2 border border-gray-200 dark:border-slate-700 rounded-md'}>Login</Link>
+                )}
               </div>
             </div>
           </motion.div>

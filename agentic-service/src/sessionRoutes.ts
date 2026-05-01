@@ -2,7 +2,7 @@ import { Express, Request, Response } from "express";
 import { messagesCollection, sessionsCollection } from "./db";
 
 export function registerSessionRoutes(app: Express) {
-  app.get("/chat/sessions", async (_req: Request, res: Response): Promise<any> => {
+  const listSessions = async (_req: Request, res: Response): Promise<any> => {
     try {
       if (!sessionsCollection) return res.json({ sessions: [] });
 
@@ -17,9 +17,9 @@ export function registerSessionRoutes(app: Express) {
     } catch (_err) {
       res.status(500).json({ error: "Failed to fetch sessions" });
     }
-  });
+  };
 
-  app.get("/chat/:sessionId/history", async (req: Request, res: Response): Promise<any> => {
+  const getSessionHistory = async (req: Request, res: Response): Promise<any> => {
     const { sessionId } = req.params;
 
     try {
@@ -43,9 +43,9 @@ export function registerSessionRoutes(app: Express) {
     } catch (_err) {
       res.status(500).json({ error: "Failed to fetch history" });
     }
-  });
+  };
 
-  app.delete("/chat/:sessionId", async (req: Request, res: Response): Promise<any> => {
+  const deleteSession = async (req: Request, res: Response): Promise<any> => {
     const { sessionId } = req.params;
 
     try {
@@ -61,5 +61,14 @@ export function registerSessionRoutes(app: Express) {
     } catch (_err) {
       res.status(500).json({ error: "Failed to delete session" });
     }
-  });
+  };
+
+  app.get("/chat/sessions", listSessions);
+  app.get("/chat/:sessionId/history", getSessionHistory);
+  app.delete("/chat/:sessionId", deleteSession);
+
+  // Aliases for gateway /sessions prefix support.
+  app.get("/sessions", listSessions);
+  app.get("/sessions/:sessionId/history", getSessionHistory);
+  app.delete("/sessions/:sessionId", deleteSession);
 }

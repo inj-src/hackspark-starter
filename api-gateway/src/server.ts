@@ -16,6 +16,7 @@ const serviceUrls = {
 const routeTargets: Array<{ prefix: string; service: keyof typeof serviceUrls }> = [
   { prefix: '/users', service: 'user-service' },
   { prefix: '/rentals', service: 'rental-service' },
+  { prefix: '/rent', service: 'rental-service' },
   { prefix: '/analytics', service: 'analytics-service' },
   { prefix: '/agentic', service: 'agentic-service' },
   { prefix: '/chat', service: 'agentic-service' },

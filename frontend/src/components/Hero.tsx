@@ -1,23 +1,34 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Search, Laptop, Car, Wrench, Music, Camera, Tent, BookOpen, Tv } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import PageTransition from './PageTransition';
 
 const categories = [
-  { id: 'electronics', name: 'Electronics', icon: Laptop },
-  { id: 'vehicles', name: 'Vehicles', icon: Car },
-  { id: 'tools', name: 'Tools', icon: Wrench },
-  { id: 'music', name: 'Music', icon: Music },
-  { id: 'photography', name: 'Cameras', icon: Camera },
-  { id: 'outdoors', name: 'Outdoors', icon: Tent },
-  { id: 'books', name: 'Books', icon: BookOpen },
-  { id: 'entertainment', name: 'Entertainment', icon: Tv },
+  { id: 'ELECTRONICS', name: 'Electronics', icon: Laptop },
+  { id: 'BIKES', name: 'Bikes', icon: Car },
+  { id: 'GARDEN', name: 'Garden', icon: Wrench },
+  { id: 'MUSICAL_INSTRUMENTS', name: 'Music', icon: Music },
+  { id: 'CAMERAS', name: 'Cameras', icon: Camera },
+  { id: 'SPORTS', name: 'Sports', icon: Tent },
+  { id: 'BOOKS', name: 'Books', icon: BookOpen },
+  { id: 'TOYS', name: 'Toys', icon: Tv },
 ];
 
 const Hero: React.FC = () => {
+  const navigate = useNavigate();
   const carouselRef = useRef<HTMLDivElement>(null);
   const [carouselWidth, setCarouselWidth] = useState(0);
+  const [searchText, setSearchText] = useState('');
+
+  const handleSearch = () => {
+    const query = searchText.trim();
+    if (!query) {
+      navigate('/rent');
+      return;
+    }
+    navigate(`/rent?search=${encodeURIComponent(query)}`);
+  };
 
   useEffect(() => {
     const update = () => {
@@ -60,30 +71,6 @@ const Hero: React.FC = () => {
             Rent, Barter, and Share items in your community. Earn credits by lending your items or pay with cash.
           </motion.p>
 
-          <motion.div
-            className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            <Link to="/rent">
-              <motion.button
-                whileHover={{ scale: 1.05, y: -2 }}
-                whileTap={{ scale: 0.97 }}
-                className="w-full sm:w-auto bg-green-500 hover:bg-green-600 text-white px-8 py-4 rounded-full font-semibold text-lg transition-all shadow-lg hover:shadow-xl"
-              >
-                Find Items to Rent
-              </motion.button>
-            </Link>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.97 }}
-              className="w-full sm:w-auto bg-white dark:bg-slate-800 border-2 border-green-500 text-green-500 hover:bg-green-50 dark:hover:bg-slate-700 px-8 py-4 rounded-full font-semibold text-lg transition-all"
-            >
-              List Your Items
-            </motion.button>
-          </motion.div>
-
           {/* Search Bar */}
           <motion.div
             className="max-w-3xl mx-auto mb-16"
@@ -100,11 +87,20 @@ const Hero: React.FC = () => {
                 type="text"
                 id="search"
                 placeholder="What do you need to rent today?"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleSearch();
+                  }
+                }}
               />
               <motion.button
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
                 className="h-12 px-6 m-2 bg-green-500 hover:bg-green-600 text-white rounded-full font-medium transition-colors"
+                onClick={handleSearch}
               >
                 Search
               </motion.button>
@@ -136,9 +132,18 @@ const Hero: React.FC = () => {
                   return (
                     <motion.div
                       key={cat.id}
+                      role="button"
+                      tabIndex={0}
                       className="min-w-[120px] h-[120px] bg-white dark:bg-slate-800 rounded-2xl shadow-sm dark:shadow-none border border-gray-100 dark:border-slate-700 flex flex-col items-center justify-center gap-3 transition-colors hover:border-green-500/50 dark:hover:border-green-500/50"
                       whileHover={{ scale: 1.05, y: -4 }}
                       whileTap={{ scale: 0.95 }}
+                      onClick={() => navigate(`/rent?category=${encodeURIComponent(cat.id)}`)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          navigate(`/rent?category=${encodeURIComponent(cat.id)}`);
+                        }
+                      }}
                     >
                       <div className="w-12 h-12 rounded-full bg-green-50 dark:bg-green-500/10 flex items-center justify-center text-green-500">
                         <Icon className="w-6 h-6" />

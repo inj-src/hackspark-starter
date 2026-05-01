@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Context, Hono } from "hono";
 import { getCache } from "../state.js";
 import { getCentralClient, getValidCategories } from "../lib/central.js";
 import { isCacheOnlyMode } from "../lib/env.js";
@@ -20,7 +20,7 @@ function toPositiveInt(v: string | undefined, fallback: number): number {
   return n;
 }
 
-productsRoute.get("/rentals/products", async (c) => {
+async function listProducts(c: Context) {
   const category = c.req.query("category");
   if (category) {
     try {
@@ -65,6 +65,21 @@ productsRoute.get("/rentals/products", async (c) => {
     );
   }
   return c.json(result.data as ProductsEnvelope, result.status as never);
+}
+
+productsRoute.get("/rentals/products", listProducts);
+productsRoute.get("/rent", listProducts);
+
+productsRoute.get("/rent/categories", async (c) => {
+  try {
+    const valid = isCacheOnlyMode()
+      ? Array.from(new Set(Array.from(getCache().productById.values()).map((p) => p.category))).sort()
+      : (await getValidCategories()).sort();
+    return c.json({ categories: valid });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "failed to fetch categories";
+    return c.json({ error: message }, 502);
+  }
 });
 
 productsRoute.get("/rentals/products/:id", async (c) => {

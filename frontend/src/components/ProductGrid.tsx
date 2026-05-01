@@ -1,6 +1,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
+import type { RootState } from '../store';
 import type { Product } from '../types';
 
 const mockProducts: Product[] = [
@@ -27,7 +29,7 @@ const mockProducts: Product[] = [
     title: 'Coleman 4-Person Tent',
     description: 'Spacious dome tent, sets up in 10 minutes. Waterproof.',
     pricePerDay: 20,
-    imageUrl: 'https://images.unsplash.com/photo-1504280390227-8a6dc509a244?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80',
+    imageUrl: 'https://images.unsplash.com/photo-1478131143081-80f7f84ca84d?auto=format&fit=crop&w=600&q=80',
     category: 'outdoors',
     lenderId: 'user3'
   },
@@ -36,7 +38,7 @@ const mockProducts: Product[] = [
     title: 'Nintendo Switch OLED',
     description: 'Comes with 4 joy-cons and Mario Kart 8.',
     pricePerDay: 25,
-    imageUrl: 'https://images.unsplash.com/photo-1617396900799-f4c924bd4788?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80',
+    imageUrl: 'https://images.unsplash.com/photo-1606144042614-b2417e99c4e3?auto=format&fit=crop&w=600&q=80',
     category: 'entertainment',
     lenderId: 'user4'
   }
@@ -57,6 +59,22 @@ const itemVariants = {
 
 const ProductGrid: React.FC = () => {
   const navigate = useNavigate();
+  const currentUser = useSelector((state: RootState) => state.user.currentUser);
+  const isAuthenticated = useSelector((state: RootState) => state.user.isAuthenticated);
+  const displayProducts = React.useMemo(() => {
+    if (!isAuthenticated || !currentUser) return mockProducts;
+    return [...mockProducts]
+      .sort((a, b) => {
+        const aScore = (a.category.length + a.id.length + currentUser.id) % 7;
+        const bScore = (b.category.length + b.id.length + currentUser.id) % 7;
+        return bScore - aScore;
+      })
+      .slice(0, 4);
+  }, [currentUser, isAuthenticated]);
+  const sectionTitle = isAuthenticated ? 'Suggested for You' : 'Recent Listings';
+  const sectionSubtitle = isAuthenticated
+    ? 'Picked for your interests and nearby activity'
+    : 'Freshly added items in your area';
 
   return (
     <section className="py-20 bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
@@ -69,8 +87,8 @@ const ProductGrid: React.FC = () => {
           transition={{ duration: 0.5 }}
         >
           <div>
-            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-slate-100 mb-2">Recent Listings</h2>
-            <p className="text-gray-600 dark:text-slate-400">Freshly added items in your area</p>
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-slate-100 mb-2">{sectionTitle}</h2>
+            <p className="text-gray-600 dark:text-slate-400">{sectionSubtitle}</p>
           </div>
           <button className="hidden sm:block text-green-500 font-medium hover:text-green-700 dark:hover:text-green-400 transition-colors">
             View All →
@@ -84,7 +102,7 @@ const ProductGrid: React.FC = () => {
           whileInView="show"
           viewport={{ once: true, margin: '-100px' }}
         >
-          {mockProducts.map((product) => (
+          {displayProducts.map((product) => (
             <motion.div
               key={product.id}
               variants={itemVariants}
@@ -95,6 +113,9 @@ const ProductGrid: React.FC = () => {
                 <img
                   src={product.imageUrl}
                   alt={product.title}
+                  onError={(event) => {
+                    event.currentTarget.src = 'https://images.unsplash.com/photo-1498049794561-7780e7231661?auto=format&fit=crop&w=600&q=80';
+                  }}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
                 <div className="absolute top-3 right-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm px-3 py-1 rounded-full font-bold text-slate-900 dark:text-slate-100 shadow-sm text-sm">

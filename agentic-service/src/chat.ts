@@ -3,8 +3,9 @@ import { Request, Response } from "express";
 import { config } from "./config";
 import { messagesCollection, sessionsCollection } from "./db";
 import { fetchWithCache } from "./fetchWithCache";
+import { buildFallbackReply } from "./replyFallback";
 
-type IntentParams = {
+export type IntentParams = {
   intent: "availability" | "peak" | "surge" | "trending" | "discount" | "category" | "none";
   productId?: number;
   productName?: string;
@@ -45,16 +46,24 @@ Rules:
 
 export function createChatHandler(genAI: GoogleGenerativeAI) {
   return async (req: Request, res: Response): Promise<any> => {
-    const { sessionId, message } = req.body;
+    const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId.trim() : "";
+    const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
     if (!sessionId || !message) {
       return res.status(400).json({ error: "sessionId and message are required" });
     }
 
+    if (sessionId.length > 128) {
+      return res.status(400).json({ error: "sessionId is too long" });
+    }
+
     if (!isOnTopic(message)) {
+      const now = new Date();
+      const reply =
+        "I can only help with RentPi related questions such as products, rentals, availability, pricing, and trends.";
+      await saveConversation(genAI, sessionId, message, reply, now);
       return res.json({
         sessionId,
-        reply:
-          "I can only help with RentPi related questions such as products, rentals, availability, pricing, and trends.",
+        reply,
       });
     }
 
@@ -66,7 +75,8 @@ export function createChatHandler(genAI: GoogleGenerativeAI) {
       if (res.headersSent) return;
 
       const finalPrompt = buildFinalPrompt(message, groundingData);
-      const assistantReply = await generateReply(genAI, geminiHistory, finalPrompt);
+      const fallbackReply = buildFallbackReply(params, groundingData);
+      const assistantReply = await generateReply(genAI, geminiHistory, finalPrompt, fallbackReply);
 
       await saveConversation(genAI, sessionId, message, assistantReply, now);
       res.json({ sessionId, reply: assistantReply });
@@ -251,7 +261,7 @@ Using ONLY the data or instructions above, answer this question naturally. Do no
 ${message}`;
 }
 
-async function generateReply(genAI: GoogleGenerativeAI, history: any[], finalPrompt: string) {
+async function generateReply(genAI: GoogleGenerativeAI, history: any[], finalPrompt: string, fallbackReply: string) {
   try {
     const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash",
@@ -262,7 +272,7 @@ async function generateReply(genAI: GoogleGenerativeAI, history: any[], finalPro
     return result.response.text();
   } catch (err) {
     console.error("Gemini API Error:", err);
-    return "I'm having trouble fetching data right now. Please try again shortly.";
+    return fallbackReply;
   }
 }
 

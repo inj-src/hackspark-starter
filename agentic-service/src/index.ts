@@ -14,8 +14,6 @@ if (!config.GEMINI_API_KEY) {
 
 const genAI = new GoogleGenerativeAI(config.GEMINI_API_KEY || "dummy_key");
 
-setupDb();
-
 app.get("/status", (_req: Request, res: Response) => {
   res.json({ service: "agentic-service", status: "OK" });
 });
@@ -23,6 +21,14 @@ app.get("/status", (_req: Request, res: Response) => {
 app.post("/chat", createChatHandler(genAI));
 registerSessionRoutes(app);
 
-app.listen(config.PORT, () => {
-  console.log(`Agentic service running on port ${config.PORT}`);
+async function start() {
+  await setupDb();
+  app.listen(config.PORT, () => {
+    console.log(`Agentic service running on port ${config.PORT}`);
+  });
+}
+
+start().catch((err) => {
+  console.error("Failed to start agentic-service", err);
+  process.exit(1);
 });
