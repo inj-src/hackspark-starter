@@ -2,40 +2,28 @@
 
 FROM node:20-alpine3.20 AS builder
 WORKDIR /app
+RUN corepack enable
+
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+
 COPY . .
+RUN pnpm build
+RUN pnpm prune --prod
 
-RUN if [ -f package.json ]; then \
-      if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then npm ci; else npm install; fi; \
-      npm run build --if-present; \
-      npm prune --omit=dev; \
-    else \
-      mkdir -p /app/_fallback; \
-      printf '%s\n' \
-      "const http = require('http');" \
-      "const service = process.env.SERVICE_NAME || 'user-service';" \
-      "const port = Number(process.env.PORT || 8001);" \
-      "const server = http.createServer((req, res) => {" \
-      "  if (req.url === '/status') {" \
-      "    res.writeHead(200, { 'Content-Type': 'application/json' });" \
-      "    res.end(JSON.stringify({ service, status: 'OK' }));" \
-      "    return;" \
-      "  }" \
-      "  res.writeHead(200, { 'Content-Type': 'text/plain' });" \
-      "  res.end(service);" \
-      "});" \
-      "server.listen(port, '0.0.0.0');" \
-      > /app/_fallback/server.js; \
-    fi
-
-FROM alpine:3.20 AS runtime
+FROM node:20-alpine3.20 AS runtime
 WORKDIR /app
-RUN apk add --no-cache nodejs npm
+RUN corepack enable
+
 ENV NODE_ENV=production
 ENV PORT=8001
-ENV SERVICE_NAME=user-service
 
-COPY --from=builder /app /app
+COPY --from=builder /app/package.json /app/pnpm-lock.yaml ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/drizzle ./drizzle
+COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
 
 EXPOSE 8001
 
-CMD ["sh", "-c", "if [ -f package.json ]; then npm run start; else node /app/_fallback/server.js; fi"]
+CMD ["pnpm", "start:migrated"]
