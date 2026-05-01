@@ -103,11 +103,10 @@ services:
     restart: unless-stopped
     ports:
       - "${RENTAL_SERVICE_PORT:-8002}:8002"
-    environment:
-      PORT:              8002
-      CENTRAL_API_URL:   ${CENTRAL_API_URL}
-      CENTRAL_API_TOKEN: ${CENTRAL_API_TOKEN}
-      USER_SERVICE_URL:  http://user-service:8001
+    env_file:
+      - ./rental-service/.env
+    volumes:
+      - ./rental-service/cache:/app/cache
     depends_on:
       user-service:
         condition: service_healthy

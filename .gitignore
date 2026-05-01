@@ -1,6 +1,6 @@
 # RentPi/.gitignore
 # You can change this file according to your need and stack.
-
+.agents
 # Dependencies
 node_modules/
 __pycache__/
