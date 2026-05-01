@@ -46,76 +46,83 @@ const containerVariants = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
-    transition: {
-      staggerChildren: 0.15
-    }
+    transition: { staggerChildren: 0.15 }
   }
 };
 
 const itemVariants = {
   hidden: { opacity: 0, y: 30 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" as const } }
+  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } }
 };
 
 const ProductGrid: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <section className="py-20 bg-gray-50">
+    <section className="py-20 bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-end mb-10">
+        <motion.div
+          className="flex justify-between items-end mb-10"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-100px' }}
+          transition={{ duration: 0.5 }}
+        >
           <div>
-            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">Recent Listings</h2>
-            <p className="text-gray-600">Freshly added items in your area</p>
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-slate-100 mb-2">Recent Listings</h2>
+            <p className="text-gray-600 dark:text-slate-400">Freshly added items in your area</p>
           </div>
-          <button className="hidden sm:block text-rentpi-green font-medium hover:text-green-700 transition-colors">
+          <button className="hidden sm:block text-green-500 font-medium hover:text-green-700 dark:hover:text-green-400 transition-colors">
             View All →
           </button>
-        </div>
+        </motion.div>
 
-        <motion.div 
+        <motion.div
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
           variants={containerVariants}
           initial="hidden"
           whileInView="show"
-          viewport={{ once: true, margin: "-100px" }}
+          viewport={{ once: true, margin: '-100px' }}
         >
           {mockProducts.map((product) => (
-            <motion.div 
-              key={product.id} 
+            <motion.div
+              key={product.id}
               variants={itemVariants}
-              className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-gray-100 flex flex-col group"
+              whileHover={{ y: -4 }}
+              className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-lg dark:shadow-none dark:hover:shadow-[0_8px_30px_rgba(0,0,0,0.4)] transition-shadow border border-gray-100 dark:border-slate-700 flex flex-col group"
             >
-              <div className="relative aspect-[4/3] overflow-hidden bg-gray-100">
-                <img 
-                  src={product.imageUrl} 
-                  alt={product.title} 
+              <div className="relative aspect-[4/3] overflow-hidden bg-gray-100 dark:bg-slate-700">
+                <img
+                  src={product.imageUrl}
+                  alt={product.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
-                <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full font-bold text-slate-900 shadow-sm text-sm">
-                  ${product.pricePerDay}<span className="text-gray-500 text-xs font-normal">/day</span>
+                <div className="absolute top-3 right-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm px-3 py-1 rounded-full font-bold text-slate-900 dark:text-slate-100 shadow-sm text-sm">
+                  ${product.pricePerDay}<span className="text-gray-500 dark:text-slate-400 text-xs font-normal">/day</span>
                 </div>
                 <div className="absolute top-3 left-3 bg-slate-900/70 backdrop-blur-sm px-2 py-1 rounded-md text-white text-xs uppercase tracking-wider font-medium">
                   {product.category}
                 </div>
               </div>
-              
+
               <div className="p-5 flex flex-col flex-grow">
-                <h3 className="font-semibold text-lg text-slate-900 mb-1 line-clamp-1">{product.title}</h3>
-                <p className="text-gray-500 text-sm mb-4 line-clamp-2 flex-grow">{product.description}</p>
-                
-                <button 
+                <h3 className="font-semibold text-lg text-slate-900 dark:text-slate-100 mb-1 line-clamp-1">{product.title}</h3>
+                <p className="text-gray-500 dark:text-slate-400 text-sm mb-4 line-clamp-2 flex-grow">{product.description}</p>
+
+                <motion.button
                   onClick={() => navigate(`/products/${product.id}`)}
-                  className="w-full bg-rentpi-green/10 text-rentpi-green hover:bg-rentpi-green hover:text-white py-2.5 rounded-xl font-medium transition-colors"
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="w-full bg-green-500/10 dark:bg-green-500/20 text-green-600 dark:text-green-400 hover:bg-green-500 hover:text-white dark:hover:bg-green-500 dark:hover:text-white py-2.5 rounded-xl font-medium transition-colors"
                 >
                   View Details
-                </button>
+                </motion.button>
               </div>
             </motion.div>
           ))}
         </motion.div>
-        
-        <button className="w-full mt-8 sm:hidden bg-white border border-gray-200 text-gray-700 py-3 rounded-xl font-medium hover:bg-gray-50 transition-colors">
+
+        <button className="w-full mt-8 sm:hidden bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 py-3 rounded-xl font-medium hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
           View All Listings
         </button>
       </div>
