@@ -160,11 +160,11 @@ app.post('/chat', async (req: Request, res: Response): Promise<any> => {
 Today's date is ${new Date().toISOString().split('T')[0]}.
 Respond ONLY with JSON. No markdown formatting.
 Format:
-- Product availability: {"intent": "availability", "productId": 1, "from": "YYYY-MM-DD", "to": "YYYY-MM-DD"}
+- Product availability: {"intent": "availability", "productId": 123, "from": "YYYY-MM-DD", "to": "YYYY-MM-DD"} (Omit productId if not mentioned)
 - Peak period: {"intent": "peak", "from": "YYYY-MM", "to": "YYYY-MM"}
 - Surge days: {"intent": "surge", "month": "YYYY-MM"}
 - Trending: {"intent": "trending", "date": "YYYY-MM-DD"}
-- Discount/User: {"intent": "discount", "userId": 1}
+- Discount/User: {"intent": "discount", "userId": 123} (Omit userId if not mentioned)
 - Category stats: {"intent": "category"}
 - Otherwise: {"intent": "none"}
 Make sure dates are strictly formatted.`;
@@ -191,9 +191,13 @@ Make sure dates are strictly formatted.`;
       } 
       else if (params.intent === "availability") {
         // Space for future gRPC implementation with rental-service
-        const url = `${RENTAL_SERVICE_URL}/rentals/products/${params.productId || 1}/availability?from=${params.from || '2024-01-01'}&to=${params.to || '2024-12-31'}`;
-        const resp = await fetchWithCache(url);
-        if (resp.ok) groundingData = await resp.json();
+        if (!params.productId) {
+          groundingData = { system_note: "The user did not provide a valid product ID. Please warmly ask them for the product ID so you can check its availability." };
+        } else {
+          const url = `${RENTAL_SERVICE_URL}/rentals/products/${params.productId}/availability?from=${params.from || '2024-01-01'}&to=${params.to || '2024-12-31'}`;
+          const resp = await fetchWithCache(url);
+          if (resp.ok) groundingData = await resp.json();
+        }
       }
       else if (params.intent === "trending") {
         const url = `${ANALYTICS_SERVICE_URL}/analytics/recommendations?date=${params.date || new Date().toISOString().split('T')[0]}&limit=5`;
@@ -228,19 +232,22 @@ Make sure dates are strictly formatted.`;
     }
 
     // Step 4: Build LLM Prompt
-    const systemInstruction = `You are RentPi Assistant, an AI chatbot for the RentPi rental marketplace platform.
+    const systemInstruction = `You are RentPi Assistant, a friendly and conversational AI chatbot for the RentPi rental marketplace.
 You help users with questions about products, rentals, availability, pricing, discounts, categories, and trends.
-You ONLY answer questions related to RentPi. Politely refuse anything unrelated.
-CRITICAL RULE: Only use the data explicitly provided to you in this prompt. Never invent numbers, dates, or product names. If data is not provided or unavailable, say so honestly.
-Keep answers concise and helpful.`;
+Tone: Warm, human, and natural. Avoid sounding robotic or overly technical.
+Rules:
+1. ONLY answer questions related to RentPi. Politely refuse anything unrelated.
+2. Only use the factual data explicitly provided in this prompt. Never invent numbers, dates, or product names.
+3. If data is missing or you need more info (like a product ID), politely ask the user for it.
+4. Keep answers concise, friendly, and easy to read.`;
 
     let finalPrompt = message;
     if (groundingData) {
-      finalPrompt = `[REAL DATA FROM RENTPI PLATFORM]
+      finalPrompt = `[REAL DATA OR SYSTEM NOTE]
 ${JSON.stringify(groundingData, null, 2)}
 [END OF DATA]
 
-Using ONLY the data above, answer this question. Do not invent details not present in the data:
+Using ONLY the data or instructions above, answer this question naturally. Do not invent details not present in the data:
 ${message}`;
     } else {
       finalPrompt = `[NO DATA AVAILABLE]
