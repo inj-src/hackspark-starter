@@ -100,8 +100,11 @@ services:
     restart: unless-stopped
     ports:
       - "${RENTAL_SERVICE_PORT:-8002}:8002"
-    env_file:
-      - ./rental-service/.env
+    environment:
+      PORT:              8002
+      CENTRAL_API_URL:   ${CENTRAL_API_URL}
+      CENTRAL_API_TOKEN: ${CENTRAL_API_TOKEN}
+      USER_SERVICE_URL:  http://user-service:8001
     depends_on:
       user-service:
         condition: service_healthy
@@ -120,8 +123,10 @@ services:
     restart: unless-stopped
     ports:
       - "${ANALYTICS_SERVICE_PORT:-8003}:8003"
-    env_file:
-      - ./analytics-service/.env
+    environment:
+      PORT:              8003
+      CENTRAL_API_URL:   ${CENTRAL_API_URL}
+      CENTRAL_API_TOKEN: ${CENTRAL_API_TOKEN}
     healthcheck:
       test: ["CMD", "/nodejs/bin/node", "-e", "fetch('http://127.0.0.1:8003/status').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
@@ -169,9 +174,6 @@ services:
       VITE_GATEWAY_URL:        http://localhost:8000
       NEXT_PUBLIC_GATEWAY_URL: http://localhost:8000
       GATEWAY_URL_INTERNAL:    http://api-gateway:8000 
-    depends_on:
-      api-gateway:
-        condition: service_healthy
     healthcheck:                                     
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000 || exit 1"]
       interval: 15s
