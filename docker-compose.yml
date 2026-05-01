@@ -155,8 +155,6 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
-      analytics-service:
-        condition: service_healthy
       rental-service:        
         condition: service_healthy
     healthcheck:
