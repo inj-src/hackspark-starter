@@ -48,61 +48,85 @@ setupDb();
 
 // In-Memory Cache for API responses
 const memoryCache = new Map<string, { timestamp: number; data: any }>();
+const inFlightRequests = new Map<string, Promise<any>>();
 const CACHE_TTL_MS = 60 * 1000; // 60 seconds TTL
 
 async function fetchWithCache(url: string, options: any = {}) {
   const cacheKey = url + (options.headers ? JSON.stringify(options.headers) : "");
+  const now = Date.now();
   if (memoryCache.has(cacheKey)) {
     const cached = memoryCache.get(cacheKey)!;
-    if (Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    if (now - cached.timestamp < CACHE_TTL_MS) {
       console.log(`[Cache Hit] ${url}`);
       return { ok: true, json: async () => cached.data };
     }
     memoryCache.delete(cacheKey);
   }
 
+  const pending = inFlightRequests.get(cacheKey);
+  if (pending) {
+    console.log(`[InFlight Join] ${url}`);
+    const data = await pending;
+    return { ok: true, json: async () => data };
+  }
+
   console.log(`[Cache Miss] ${url}`);
-  let attempt = 0;
-  const maxRetries = 3;
-  let lastRetryAfter = 72;
+  const task = (async () => {
+    let attempt = 0;
+    const maxRetries = 3;
+    let lastRetryAfter = 72;
 
-  while (attempt <= maxRetries) {
-    const resp = await fetch(url, options);
+    while (attempt <= maxRetries) {
+      const resp = await fetch(url, options);
 
-    if (resp.status === 429) {
-      if (attempt === maxRetries) {
-        throw { message: "429_EXHAUSTED", lastRetryAfter };
+      if (resp.status === 429) {
+        if (attempt === maxRetries) {
+          throw { message: "429_EXHAUSTED", lastRetryAfter };
+        }
+
+        let retryAfterSeconds = 10;
+        try {
+          const body = await resp.json();
+          retryAfterSeconds = body.retryAfterSeconds || 10;
+        } catch (e) {}
+
+        lastRetryAfter = retryAfterSeconds;
+
+        let backoff = retryAfterSeconds * Math.pow(2, attempt);
+        const jitter = backoff * 0.2;
+        backoff = backoff + (Math.random() * 2 * jitter - jitter);
+
+        console.log(
+          `[retry ${attempt + 1}/${maxRetries}] waiting ${Math.round(backoff)}s before retrying GET ${url}`,
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, backoff * 1000));
+        attempt++;
+        continue;
       }
 
-      let retryAfterSeconds = 10;
-      try {
-        const body = await resp.json();
-        retryAfterSeconds = body.retryAfterSeconds || 10;
-      } catch (e) {}
+      if (resp.ok) {
+        const data = await resp.json();
+        memoryCache.set(cacheKey, { timestamp: Date.now(), data });
+        return data;
+      }
 
-      lastRetryAfter = retryAfterSeconds;
-
-      let backoff = retryAfterSeconds * Math.pow(2, attempt);
-      const jitter = backoff * 0.2;
-      backoff = backoff + (Math.random() * 2 * jitter - jitter);
-
-      console.log(
-        `[retry ${attempt + 1}/${maxRetries}] waiting ${Math.round(backoff)}s before retrying GET ${url}`,
-      );
-
-      await new Promise((resolve) => setTimeout(resolve, backoff * 1000));
-      attempt++;
-      continue;
+      throw { message: "UPSTREAM_ERROR", response: resp };
     }
+    throw { message: "UNKNOWN_ERROR" };
+  })().finally(() => {
+    inFlightRequests.delete(cacheKey);
+  });
 
-    if (resp.ok) {
-      const data = await resp.json();
-      memoryCache.set(cacheKey, { timestamp: Date.now(), data });
-      return { ok: true, json: async () => data };
-    }
-    return resp;
+  inFlightRequests.set(cacheKey, task);
+
+  try {
+    const data = await task;
+    return { ok: true, json: async () => data };
+  } catch (err: any) {
+    if (err?.message === "UPSTREAM_ERROR" && err.response) return err.response;
+    throw err;
   }
-  return { ok: false, json: async () => ({}) };
 }
 
 // Keywords guard
