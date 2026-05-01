@@ -15,6 +15,12 @@ interface ChatWindowProps {
   onClose: () => void;
 }
 
+const QUICK_PROMPTS = [
+  'is there any portable station available?',
+  'is there any cycle available?',
+  'what do you know about Pro Tool #7',
+];
+
 function createSessionId() {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
   return `session-${Date.now()}`;
@@ -33,15 +39,16 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ onClose }) => {
   });
 
   const sessions = useMemo(() => sessionsQuery.data?.sessions ?? [], [sessionsQuery.data]);
-  const resolvedSessionId = useMemo(() => {
-    if (sessions.some((s) => s.sessionId === activeSessionId)) return activeSessionId;
-    return sessions[0]?.sessionId ?? activeSessionId;
-  }, [activeSessionId, sessions]);
+  const sessionExists = useMemo(
+    () => sessions.some((s) => s.sessionId === activeSessionId),
+    [activeSessionId, sessions]
+  );
+  const resolvedSessionId = activeSessionId;
 
   const historyQuery = useQuery({
     queryKey: ['chat-history', resolvedSessionId],
     queryFn: () => fetchSessionHistory(resolvedSessionId),
-    enabled: Boolean(resolvedSessionId),
+    enabled: sessionExists,
     retry: false,
   });
 
@@ -82,9 +89,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ onClose }) => {
     return localMessagesBySession[resolvedSessionId] ?? historyQuery.data?.messages ?? [];
   }, [historyQuery.data?.messages, historyQuery.isError, localMessagesBySession, resolvedSessionId]);
 
-  const handleSend = (event: React.FormEvent) => {
-    event.preventDefault();
-    const text = inputValue.trim();
+  const submitMessage = (rawText: string) => {
+    const text = rawText.trim();
     if (!text || sendMutation.isPending) return;
 
     setErrorMessage(null);
@@ -96,6 +102,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ onClose }) => {
       return { ...current, [resolvedSessionId]: [...existing, { role: 'user', content: text, timestamp: now }] };
     });
     sendMutation.mutate({ sessionId: resolvedSessionId, message: text });
+  };
+
+  const handleSend = (event: React.FormEvent) => {
+    event.preventDefault();
+    submitMessage(inputValue);
   };
 
   const handleNewChat = () => {
@@ -203,6 +214,19 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ onClose }) => {
         </div>
 
         <div className="bg-white dark:bg-slate-800 p-3 border-slate-100 dark:border-slate-700 border-t">
+          <div className="flex flex-wrap gap-2 mb-3">
+            {QUICK_PROMPTS.map((prompt) => (
+              <button
+                key={prompt}
+                type="button"
+                onClick={() => submitMessage(prompt)}
+                disabled={sendMutation.isPending}
+                className="text-xs px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 disabled:opacity-60"
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
           <form onSubmit={handleSend} className="flex items-center space-x-2">
             <input
               type="text"

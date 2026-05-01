@@ -17,6 +17,7 @@ import Register from './pages/Register';
 import Products from './pages/Products';
 import Availability from './pages/Availability';
 import ChatPage from './pages/Chat';
+import Community from './pages/Community';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import InteractiveAssistant from './components/InteractiveAssistant';
@@ -68,6 +69,7 @@ function Layout() {
             <Route path="/products" element={<Products />} />
             <Route path="/availability" element={<Availability />} />
             <Route path="/chat" element={<ChatPage />} />
+            <Route path="/community" element={<Community />} />
           </Routes>
         </AnimatePresence>
       </main>

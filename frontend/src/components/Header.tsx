@@ -50,7 +50,7 @@ const Header: React.FC = () => {
           <nav className="hidden md:flex space-x-8">
             <Link to="/" className={navLink('/', pathname)}>Home</Link>
             <Link to="/rent" className={navLink('/rent', pathname)}>Rent</Link>
-            <Link to="/" className={navLink('/', pathname)}>Community</Link>
+            <Link to="/community" className={navLink('/community', pathname)}>Community</Link>
           </nav>
 
           <div className="hidden md:flex items-center space-x-3">
@@ -148,7 +148,7 @@ const Header: React.FC = () => {
             <div className="px-4 pt-2 pb-4 space-y-1 flex flex-col">
               <Link to="/" onClick={() => setIsMenuOpen(false)} className={mobileNavLink('/', pathname)}>Home</Link>
               <Link to="/rent" onClick={() => setIsMenuOpen(false)} className={mobileNavLink('/rent', pathname)}>Rent</Link>
-              <Link to="/" onClick={() => setIsMenuOpen(false)} className={mobileNavLink('/', pathname)}>Community</Link>
+              <Link to="/community" onClick={() => setIsMenuOpen(false)} className={mobileNavLink('/community', pathname)}>Community</Link>
               <div className="mt-3 flex flex-col gap-2 px-3">
                 {isAuthenticated ? (
                   <button onClick={handleLogout} className="w-full text-center text-gray-600 dark:text-slate-300 hover:text-green-500 font-medium py-2 border border-gray-200 dark:border-slate-700 rounded-md">Logout</button>

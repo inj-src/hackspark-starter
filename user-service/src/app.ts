@@ -3,6 +3,7 @@ import { logger } from 'hono/logger'
 import { HTTPException } from 'hono/http-exception'
 import statusRouter from './routes/status.js'
 import usersRouter from './routes/users.js'
+import communityRouter from './routes/community.js'
 
 const app = new Hono()
 
@@ -10,6 +11,7 @@ app.use('*', logger())
 
 app.route('/status', statusRouter)
 app.route('/users', usersRouter)
+app.route('/community', communityRouter)
 
 app.notFound((c) => c.json({ error: 'Not Found' }, 404))
 

@@ -21,6 +21,7 @@ const routeTargets: Array<{ prefix: string; service: keyof typeof serviceUrls }>
   { prefix: '/agentic', service: 'agentic-service' },
   { prefix: '/chat', service: 'agentic-service' },
   { prefix: '/sessions', service: 'agentic-service' },
+  { prefix: '/community', service: 'user-service' },
 ]
 
 app.use('*', cors())
