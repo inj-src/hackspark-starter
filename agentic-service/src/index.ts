@@ -1,6 +1,6 @@
-const express = require('express');
-const { MongoClient } = require('mongodb');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+import express, { Request, Response } from 'express';
+import { MongoClient, Db, Collection } from 'mongodb';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const app = express();
 app.use(express.json());
@@ -19,7 +19,9 @@ if (!GEMINI_API_KEY) {
 }
 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY || 'dummy_key');
-let db, sessionsCollection, messagesCollection;
+let db: Db;
+let sessionsCollection: Collection;
+let messagesCollection: Collection;
 
 // Setup MongoDB connection
 async function setupDb() {
@@ -44,23 +46,48 @@ async function setupDb() {
 
 setupDb();
 
+// In-Memory Cache for API responses
+const memoryCache = new Map<string, { timestamp: number, data: any }>();
+const CACHE_TTL_MS = 60 * 1000; // 60 seconds TTL
+
+async function fetchWithCache(url: string, options: any = {}) {
+  const cacheKey = url + (options.headers ? JSON.stringify(options.headers) : '');
+  if (memoryCache.has(cacheKey)) {
+    const cached = memoryCache.get(cacheKey)!;
+    if (Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      console.log(`[Cache Hit] ${url}`);
+      return { ok: true, json: async () => cached.data };
+    }
+    memoryCache.delete(cacheKey);
+  }
+
+  console.log(`[Cache Miss] ${url}`);
+  const resp = await fetch(url, options);
+  if (resp.ok) {
+    const data = await resp.json();
+    memoryCache.set(cacheKey, { timestamp: Date.now(), data });
+    return { ok: true, json: async () => data };
+  }
+  return resp;
+}
+
 // Keywords guard
 const RENTPI_KEYWORDS = [
   "rental", "product", "category", "price", "discount", "available", "availability",
   "renter", "owner", "rentpi", "booking", "gear", "surge", "peak", "trending", "rent"
 ];
 
-function isOnTopic(message) {
+function isOnTopic(message: string) {
   const lower = message.toLowerCase();
   return RENTPI_KEYWORDS.some(kw => lower.includes(kw));
 }
 
 // Routes
-app.get('/status', (req, res) => {
+app.get('/status', (req: Request, res: Response) => {
   res.json({ service: 'agentic-service', status: 'OK' });
 });
 
-app.post('/chat', async (req, res) => {
+app.post('/chat', async (req: Request, res: Response): Promise<any> => {
   const { sessionId, message } = req.body;
   if (!sessionId || !message) {
     return res.status(400).json({ error: 'sessionId and message are required' });
@@ -68,9 +95,9 @@ app.post('/chat', async (req, res) => {
 
   // Step 1: Keyword Guard
   if (!isOnTopic(message)) {
-    return res.json({
-      sessionId,
-      reply: "I can only help with RentPi related questions such as products, rentals, availability, pricing, and trends."
+    return res.json({ 
+      sessionId, 
+      reply: "I can only help with RentPi related questions such as products, rentals, availability, pricing, and trends." 
     });
   }
 
@@ -78,7 +105,7 @@ app.post('/chat', async (req, res) => {
     const now = new Date();
 
     // Step 2: Load chat history
-    let historyDocs = [];
+    let historyDocs: any[] = [];
     try {
       if (messagesCollection) {
         historyDocs = await messagesCollection.find({ sessionId }).sort({ timestamp: 1 }).toArray();
@@ -93,44 +120,44 @@ app.post('/chat', async (req, res) => {
     }));
 
     // Step 3: Intent & Grounding Data
-    let groundingData = null;
+    let groundingData: any = null;
     const lowerMessage = message.toLowerCase();
-
+    
     try {
       if (lowerMessage.includes("category") || lowerMessage.includes("most rented") || lowerMessage.includes("category stats")) {
         const url = `${CENTRAL_API_URL}/api/data/rentals/stats?group_by=category`;
-        const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${CENTRAL_API_TOKEN}` } });
+        const resp = await fetchWithCache(url, { headers: { 'Authorization': `Bearer ${CENTRAL_API_TOKEN}` } });
         if (resp.ok) groundingData = await resp.json();
-      }
+      } 
       else if (lowerMessage.includes("available") || lowerMessage.includes("availability") || lowerMessage.includes("book") || lowerMessage.includes("free")) {
         const match = message.match(/\b\d+\b/);
         const productId = match ? match[0] : 1;
         const url = `${RENTAL_SERVICE_URL}/rentals/products/${productId}/availability?from=2024-01-01&to=2024-12-31`;
-        const resp = await fetch(url);
+        const resp = await fetchWithCache(url);
         if (resp.ok) groundingData = await resp.json();
       }
       else if (lowerMessage.includes("trending") || lowerMessage.includes("recommend") || lowerMessage.includes("season") || lowerMessage.includes("right now")) {
         const today = new Date().toISOString().split('T')[0];
         const url = `${ANALYTICS_SERVICE_URL}/analytics/recommendations?date=${today}&limit=5`;
-        const resp = await fetch(url);
+        const resp = await fetchWithCache(url);
         if (resp.ok) groundingData = await resp.json();
       }
       else if (lowerMessage.includes("surge") || lowerMessage.includes("spike") || lowerMessage.includes("surge day")) {
         const month = new Date().toISOString().substring(0, 7);
         const url = `${ANALYTICS_SERVICE_URL}/analytics/surge-days?month=${month}`;
-        const resp = await fetch(url);
+        const resp = await fetchWithCache(url);
         if (resp.ok) groundingData = await resp.json();
       }
       else if (lowerMessage.includes("peak") || lowerMessage.includes("busiest week") || lowerMessage.includes("7 day") || lowerMessage.includes("rush")) {
         const url = `${ANALYTICS_SERVICE_URL}/analytics/peak-window?from=2024-01&to=2024-06`;
-        const resp = await fetch(url);
+        const resp = await fetchWithCache(url);
         if (resp.ok) groundingData = await resp.json();
       }
       else if (lowerMessage.includes("discount") || lowerMessage.includes("security score") || lowerMessage.includes("loyalty")) {
         const match = message.match(/\b\d+\b/);
-        const userId = match ? match[0] : 1;
+        const userId = match ? match[0] : 1; 
         const url = `${CENTRAL_API_URL}/api/data/users/${userId}`;
-        const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${CENTRAL_API_TOKEN}` } });
+        const resp = await fetchWithCache(url, { headers: { 'Authorization': `Bearer ${CENTRAL_API_TOKEN}` } });
         if (resp.ok) groundingData = await resp.json();
       }
     } catch (err) {
@@ -158,11 +185,11 @@ ${message}`;
     // Step 5: Call Gemini
     let assistantReply = "";
     try {
-      const model = genAI.getGenerativeModel({
+      const model = genAI.getGenerativeModel({ 
         model: "gemini-2.5-flash",
         systemInstruction
       });
-
+      
       const chat = model.startChat({
         history: geminiHistory,
       });
@@ -220,12 +247,12 @@ ${message}`;
   }
 });
 
-app.get('/chat/sessions', async (req, res) => {
+app.get('/chat/sessions', async (req: Request, res: Response): Promise<any> => {
   try {
     if (!sessionsCollection) return res.json({ sessions: [] });
     const sessions = await sessionsCollection.find({}).sort({ lastMessageAt: -1 }).toArray();
     res.json({
-      sessions: sessions.map(s => ({
+      sessions: sessions.map((s: any) => ({
         sessionId: s.sessionId,
         name: s.name,
         lastMessageAt: s.lastMessageAt
@@ -236,22 +263,22 @@ app.get('/chat/sessions', async (req, res) => {
   }
 });
 
-app.get('/chat/:sessionId/history', async (req, res) => {
+app.get('/chat/:sessionId/history', async (req: Request, res: Response): Promise<any> => {
   const { sessionId } = req.params;
   try {
     if (!sessionsCollection || !messagesCollection) return res.status(500).json({ error: 'DB not connected' });
-
+    
     const session = await sessionsCollection.findOne({ sessionId });
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
     }
 
     const messages = await messagesCollection.find({ sessionId }).sort({ timestamp: 1 }).toArray();
-
+    
     res.json({
       sessionId: session.sessionId,
       name: session.name,
-      messages: messages.map(m => ({
+      messages: messages.map((m: any) => ({
         role: m.role,
         content: m.content,
         timestamp: m.timestamp
@@ -262,7 +289,7 @@ app.get('/chat/:sessionId/history', async (req, res) => {
   }
 });
 
-app.delete('/chat/:sessionId', async (req, res) => {
+app.delete('/chat/:sessionId', async (req: Request, res: Response): Promise<any> => {
   const { sessionId } = req.params;
   try {
     if (!sessionsCollection) return res.status(500).json({ error: 'DB not connected' });
@@ -270,7 +297,7 @@ app.delete('/chat/:sessionId', async (req, res) => {
     if (result.deletedCount === 0) {
       return res.status(404).json({ error: 'Session not found' });
     }
-
+    
     await messagesCollection.deleteMany({ sessionId });
     res.json({ deleted: true });
   } catch (err) {
