@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { getCache } from "../state.js";
 import type { Rental } from "../types.js";
+import { CentralApiClient } from "../lib/central-client.js";
 
 const DAY_MS = 86_400_000;
 const monthRegex = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -132,7 +133,7 @@ analyticsRoute.get("/analytics/surge-days", (c) => {
   });
 });
 
-analyticsRoute.get("/analytics/recommendations", (c) => {
+analyticsRoute.get("/analytics/recommendations", async (c) => {
   const date = c.req.query("date");
   if (!date) return c.json({ error: "date is required in YYYY-MM-DD" }, 400);
 
@@ -164,18 +165,38 @@ analyticsRoute.get("/analytics/recommendations", (c) => {
     scores.set(rental.productId, (scores.get(rental.productId) ?? 0) + 1);
   }
 
-  const recommendations = Array.from(scores.entries())
+  const rawRecommendations = Array.from(scores.entries())
     .sort((a, b) => b[1] - a[1] || a[0] - b[0])
     .slice(0, limit)
-    .map(([productId, score]) => {
-      const p = cache.productById.get(productId);
-      return {
-        productId,
-        name: p?.name ?? `Product #${productId}`,
-        category: p?.category ?? "UNKNOWN",
-        score,
-      };
-    });
+    .map(([productId, score]) => ({ productId, score }));
+
+  const missingIds = rawRecommendations
+    .filter((r) => !cache.productById.has(r.productId))
+    .map((r) => r.productId);
+
+  if (missingIds.length > 0) {
+    const client = new CentralApiClient(
+      process.env.CENTRAL_API_URL || "https://technocracy.brittoo.xyz",
+      process.env.CENTRAL_API_TOKEN || ""
+    );
+    const res = await client.getJson<any>(`/api/data/products/batch?ids=${missingIds.join(",")}`);
+    const products = Array.isArray(res.data) ? res.data : res.data?.data;
+    if (res.ok && Array.isArray(products)) {
+      for (const p of products) {
+        cache.productById.set(p.id, p);
+      }
+    }
+  }
+
+  const recommendations = rawRecommendations.map((r) => {
+    const p = cache.productById.get(r.productId);
+    return {
+      productId: r.productId,
+      name: p?.name ?? `Product #${r.productId}`,
+      category: p?.category ?? "UNKNOWN",
+      score: r.score,
+    };
+  });
 
   return c.json({ date, recommendations });
 });
