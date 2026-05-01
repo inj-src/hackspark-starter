@@ -1,27 +1,26 @@
-import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 
 interface ThemeState {
   isDark: boolean;
 }
 
-const savedTheme = localStorage.getItem('rentpi-theme');
-const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+const savedTheme = localStorage.getItem("rentpi-theme");
 
 const initialState: ThemeState = {
-  isDark: savedTheme ? savedTheme === 'dark' : false,
+  isDark: savedTheme ? savedTheme === "dark" : false,
 };
 
 const themeSlice = createSlice({
-  name: 'theme',
+  name: "theme",
   initialState,
   reducers: {
     toggleTheme: (state) => {
       state.isDark = !state.isDark;
-      localStorage.setItem('rentpi-theme', state.isDark ? 'dark' : 'light');
+      localStorage.setItem("rentpi-theme", state.isDark ? "dark" : "light");
     },
     setTheme: (state, action: PayloadAction<boolean>) => {
       state.isDark = action.payload;
-      localStorage.setItem('rentpi-theme', action.payload ? 'dark' : 'light');
+      localStorage.setItem("rentpi-theme", action.payload ? "dark" : "light");
     },
   },
 });

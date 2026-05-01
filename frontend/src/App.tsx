@@ -13,7 +13,6 @@ import Home from './pages/Home';
 import ProductDetails from './pages/ProductDetails';
 import Rent from './pages/Rent';
 import Login from './pages/Login';
-import Register from './pages/Register';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import InteractiveAssistant from './components/InteractiveAssistant';
@@ -61,7 +60,6 @@ function Layout() {
             <Route path="/rent" element={<Rent />} />
             <Route path="/rent/:id" element={<ProductDetails />} />
             <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
           </Routes>
         </AnimatePresence>
       </main>

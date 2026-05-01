@@ -1,21 +1,37 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Menu, X, Sun, Moon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDispatch, useSelector } from 'react-redux';
 import { toggleTheme } from '../store/themeSlice';
 import type { RootState } from '../store';
 
+const navLink = (to: string, pathname: string) => {
+  const isActive =
+    to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(to + '/');
+  return isActive
+    ? 'text-green-500 font-medium transition-colors'
+    : 'text-gray-600 dark:text-slate-300 hover:text-green-500 dark:hover:text-green-400 font-medium transition-colors';
+};
+
+const mobileNavLink = (to: string, pathname: string) => {
+  const isActive =
+    to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(to + '/');
+  return isActive
+    ? 'block px-3 py-2 text-base font-semibold text-green-500 bg-green-50 dark:bg-green-500/10 rounded-md'
+    : 'block px-3 py-2 text-base font-medium text-gray-800 dark:text-slate-200 hover:text-green-500 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-md';
+};
+
 const Header: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const dispatch = useDispatch();
   const isDark = useSelector((state: RootState) => state.theme.isDark);
+  const { pathname } = useLocation();
 
   return (
     <header className="sticky top-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shadow-sm border-b border-gray-100 dark:border-slate-800 transition-colors duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          {/* Logo */}
           <div className="flex-shrink-0 flex items-center">
             <Link to="/" className="text-2xl font-bold text-green-500 flex items-center gap-2">
               <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center text-white font-bold">R</div>
@@ -23,17 +39,13 @@ const Header: React.FC = () => {
             </Link>
           </div>
 
-          {/* Desktop Navigation */}
           <nav className="hidden md:flex space-x-8">
-            <Link to="/" className="text-gray-600 dark:text-slate-300 hover:text-green-500 dark:hover:text-green-400 font-medium transition-colors">Home</Link>
-            <Link to="/rent" className="text-gray-600 dark:text-slate-300 hover:text-green-500 dark:hover:text-green-400 font-medium transition-colors">Rent</Link>
-            <Link to="/register" className="text-gray-600 dark:text-slate-300 hover:text-green-500 dark:hover:text-green-400 font-medium transition-colors">Register</Link>
-            <Link to="/" className="text-gray-600 dark:text-slate-300 hover:text-green-500 dark:hover:text-green-400 font-medium transition-colors">Community</Link>
+            <Link to="/" className={navLink('/', pathname)}>Home</Link>
+            <Link to="/rent" className={navLink('/rent', pathname)}>Rent</Link>
+            <Link to="/" className={navLink('/', pathname)}>Community</Link>
           </nav>
 
-          {/* Auth Buttons + Theme Toggle */}
           <div className="hidden md:flex items-center space-x-3">
-            {/* Theme Toggle */}
             <motion.button
               onClick={() => dispatch(toggleTheme())}
               whileHover={{ scale: 1.1 }}
@@ -70,23 +82,13 @@ const Header: React.FC = () => {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="text-gray-600 dark:text-slate-300 hover:text-green-500 dark:hover:text-green-400 font-medium transition-colors px-3 py-2"
+                className={pathname === '/login' ? 'text-green-500 font-medium transition-colors px-3 py-2' : 'text-gray-600 dark:text-slate-300 hover:text-green-500 dark:hover:text-green-400 font-medium transition-colors px-3 py-2'}
               >
                 Login
               </motion.button>
             </Link>
-            <Link to="/register">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded-full font-medium transition-colors shadow-sm hover:shadow-md"
-              >
-                Sign Up
-              </motion.button>
-            </Link>
           </div>
 
-          {/* Mobile: Theme + Hamburger */}
           <div className="md:hidden flex items-center gap-2">
             <motion.button
               onClick={() => dispatch(toggleTheme())}
@@ -116,7 +118,6 @@ const Header: React.FC = () => {
         </div>
       </div>
 
-      {/* Mobile Navigation */}
       <AnimatePresence>
         {isMenuOpen && (
           <motion.div
@@ -126,13 +127,11 @@ const Header: React.FC = () => {
             className="md:hidden bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 overflow-hidden"
           >
             <div className="px-4 pt-2 pb-4 space-y-1 flex flex-col">
-              <Link to="/" onClick={() => setIsMenuOpen(false)} className="block px-3 py-2 text-base font-medium text-gray-800 dark:text-slate-200 hover:text-green-500 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-md">Home</Link>
-              <Link to="/rent" onClick={() => setIsMenuOpen(false)} className="block px-3 py-2 text-base font-medium text-gray-800 dark:text-slate-200 hover:text-green-500 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-md">Rent</Link>
-              <Link to="/register" onClick={() => setIsMenuOpen(false)} className="block px-3 py-2 text-base font-medium text-gray-800 dark:text-slate-200 hover:text-green-500 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-md">Register</Link>
-              <Link to="/" onClick={() => setIsMenuOpen(false)} className="block px-3 py-2 text-base font-medium text-gray-800 dark:text-slate-200 hover:text-green-500 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-md">Community</Link>
+              <Link to="/" onClick={() => setIsMenuOpen(false)} className={mobileNavLink('/', pathname)}>Home</Link>
+              <Link to="/rent" onClick={() => setIsMenuOpen(false)} className={mobileNavLink('/rent', pathname)}>Rent</Link>
+              <Link to="/" onClick={() => setIsMenuOpen(false)} className={mobileNavLink('/', pathname)}>Community</Link>
               <div className="mt-3 flex flex-col gap-2 px-3">
-                <Link to="/login" onClick={() => setIsMenuOpen(false)} className="w-full text-center text-gray-600 dark:text-slate-300 hover:text-green-500 font-medium py-2 border border-gray-200 dark:border-slate-700 rounded-md">Login</Link>
-                <Link to="/register" onClick={() => setIsMenuOpen(false)} className="w-full text-center bg-green-500 hover:bg-green-600 text-white py-2 rounded-md font-medium">Sign Up</Link>
+                <Link to="/login" onClick={() => setIsMenuOpen(false)} className={pathname === '/login' ? 'w-full text-center text-green-500 font-semibold py-2 border border-green-500 rounded-md' : 'w-full text-center text-gray-600 dark:text-slate-300 hover:text-green-500 font-medium py-2 border border-gray-200 dark:border-slate-700 rounded-md'}>Login</Link>
               </div>
             </div>
           </motion.div>
