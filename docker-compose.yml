@@ -106,12 +106,12 @@ services:
     env_file:
       - ./rental-service/.env
     volumes:
-      - ./rental-service/cache:/app/cache
+      - ./cache:/cache
     depends_on:
       user-service:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8002/status || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8002/status || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -125,10 +125,10 @@ services:
     restart: unless-stopped
     ports:
       - "${ANALYTICS_SERVICE_PORT:-8003}:8003"
-    environment:
-      PORT:              8003
-      CENTRAL_API_URL:   ${CENTRAL_API_URL}
-      CENTRAL_API_TOKEN: ${CENTRAL_API_TOKEN}
+    env_file:
+      - ./analytics-service/.env
+    volumes:
+      - ./cache:/cache
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8003/status || exit 1"]
       interval: 15s

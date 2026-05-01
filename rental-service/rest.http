@@ -1,0 +1,38 @@
+@baseUrl = http://localhost:8002
+@productId = 42
+@from = 2024-03-01
+@to = 2024-03-14
+
+### Health check
+GET {{baseUrl}}/status HTTP/1.1
+Accept: application/json
+
+###
+
+### Cache metrics (confirm cache-only mode and index counts)
+GET {{baseUrl}}/internal/cache/metrics HTTP/1.1
+Accept: application/json
+
+###
+
+### Product availability (valid)
+GET {{baseUrl}}/rentals/products/{{productId}}/availability?from={{from}}&to={{to}} HTTP/1.1
+Accept: application/json
+
+###
+
+### Product availability (invalid date format -> 400)
+GET {{baseUrl}}/rentals/products/{{productId}}/availability?from=2024-03-40&to=2024-03-14 HTTP/1.1
+Accept: application/json
+
+###
+
+### Product availability (from > to -> 400)
+GET {{baseUrl}}/rentals/products/{{productId}}/availability?from=2024-03-15&to=2024-03-14 HTTP/1.1
+Accept: application/json
+
+###
+
+### Product availability (missing params -> 400)
+GET {{baseUrl}}/rentals/products/{{productId}}/availability HTTP/1.1
+Accept: application/json

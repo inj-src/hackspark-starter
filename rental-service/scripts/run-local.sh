@@ -7,11 +7,11 @@ cd "$ROOT_DIR"
 export DISABLE_SCRAPER=true
 
 echo "[local] starting scraper loop..."
-pnpm scrape:loop &
+npm run scrape:loop &
 SCRAPER_PID=$!
 
 echo "[local] starting hono server..."
-pnpm start &
+npm run start &
 SERVER_PID=$!
 
 cleanup() {
