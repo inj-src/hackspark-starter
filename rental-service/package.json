@@ -11,7 +11,7 @@
     "scrape:once": "tsx src/scraper/cli.ts once",
     "scrape:loop": "tsx src/scraper/cli.ts loop",
     "test": "vitest run",
-    "scrape:local": "bash scripts/run-local-scraper.sh"
+    "scrape:local": "bash ../scripts/run-rental-scraper.sh"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.0",

@@ -106,7 +106,7 @@ services:
     env_file:
       - ./rental-service/.env
     volumes:
-      - ./rental-service/cache:/app/cache
+      - ./cache:/cache
     depends_on:
       user-service:
         condition: service_healthy
@@ -128,7 +128,7 @@ services:
     env_file:
       - ./analytics-service/.env
     volumes:
-      - ./analytics-service/cache:/app/cache
+      - ./cache:/cache
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8003/status || exit 1"]
       interval: 15s

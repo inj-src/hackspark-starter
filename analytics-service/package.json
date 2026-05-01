@@ -10,7 +10,7 @@
     "start": "node dist/server.js",
     "scrape:once": "tsx src/scraper/cli.ts once",
     "scrape:loop": "tsx src/scraper/cli.ts loop",
-    "scrape:local": "bash scripts/run-local-scraper.sh"
+    "scrape:local": "bash ../scripts/run-analytics-scraper.sh"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.0",

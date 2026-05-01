@@ -14,7 +14,7 @@ app.route("/", statusRoute);
 app.route("/", analyticsRoute);
 
 const port = Number(process.env.PORT ?? 8003);
-const cacheDir = process.env.ANALYTICS_CACHE_DIR ?? path.join(process.cwd(), "cache");
+const cacheDir = process.env.ANALYTICS_CACHE_DIR ?? path.join(process.cwd(), "..", "cache");
 const runtime = await createScraperRuntime(cacheDir);
 setCache(runtime.cache);
 

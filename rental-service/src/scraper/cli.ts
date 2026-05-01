@@ -4,7 +4,7 @@ import { createScraperRuntime } from "./runner.js";
 
 async function main() {
   const mode = process.argv[2] ?? "loop";
-  const cacheDir = process.env.RENTAL_CACHE_DIR ?? path.join(process.cwd(), "cache");
+  const cacheDir = process.env.RENTAL_CACHE_DIR ?? path.join(process.cwd(), "..", "cache");
   const runtime = await createScraperRuntime(cacheDir);
 
   if (mode === "once") {
