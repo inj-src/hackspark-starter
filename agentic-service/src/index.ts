@@ -1,24 +1,24 @@
-import express, { Request, Response } from 'express';
-import { MongoClient, Db, Collection } from 'mongodb';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import express, { Request, Response } from "express";
+import { MongoClient, Db, Collection } from "mongodb";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const app = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 8004;
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://mongo:27017';
-const MONGO_DB = process.env.MONGO_DB || 'rentpi_chat';
+const MONGO_URI = process.env.MONGO_URI || "mongodb://mongo:27017";
+const MONGO_DB = process.env.MONGO_DB || "rentpi_chat";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const CENTRAL_API_URL = process.env.CENTRAL_API_URL || 'https://technocracy.brittoo.xyz';
+const CENTRAL_API_URL = process.env.CENTRAL_API_URL || "https://technocracy.brittoo.xyz";
 const CENTRAL_API_TOKEN = process.env.CENTRAL_API_TOKEN;
-const ANALYTICS_SERVICE_URL = process.env.ANALYTICS_SERVICE_URL || 'http://analytics-service:8003';
-const RENTAL_SERVICE_URL = process.env.RENTAL_SERVICE_URL || 'http://rental-service:8002';
+const ANALYTICS_SERVICE_URL = process.env.ANALYTICS_SERVICE_URL || "http://analytics-service:8003";
+const RENTAL_SERVICE_URL = process.env.RENTAL_SERVICE_URL || "http://rental-service:8002";
 
 if (!GEMINI_API_KEY) {
   console.warn("WARNING: GEMINI_API_KEY is not set.");
 }
 
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY || 'dummy_key');
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY || "dummy_key");
 let db: Db;
 let sessionsCollection: Collection;
 let messagesCollection: Collection;
@@ -29,8 +29,8 @@ async function setupDb() {
     const client = new MongoClient(MONGO_URI);
     await client.connect();
     db = client.db(MONGO_DB);
-    sessionsCollection = db.collection('sessions');
-    messagesCollection = db.collection('messages');
+    sessionsCollection = db.collection("sessions");
+    messagesCollection = db.collection("messages");
 
     // Create Indexes
     await sessionsCollection.createIndex({ sessionId: 1 }, { unique: true });
@@ -38,20 +38,20 @@ async function setupDb() {
     await messagesCollection.createIndex({ sessionId: 1 });
     await messagesCollection.createIndex({ timestamp: 1 });
 
-    console.log('Connected to MongoDB and initialized indexes');
+    console.log("Connected to MongoDB and initialized indexes");
   } catch (err) {
-    console.error('Failed to connect to MongoDB:', err);
+    console.error("Failed to connect to MongoDB:", err);
   }
 }
 
 setupDb();
 
 // In-Memory Cache for API responses
-const memoryCache = new Map<string, { timestamp: number, data: any }>();
+const memoryCache = new Map<string, { timestamp: number; data: any }>();
 const CACHE_TTL_MS = 60 * 1000; // 60 seconds TTL
 
 async function fetchWithCache(url: string, options: any = {}) {
-  const cacheKey = url + (options.headers ? JSON.stringify(options.headers) : '');
+  const cacheKey = url + (options.headers ? JSON.stringify(options.headers) : "");
   if (memoryCache.has(cacheKey)) {
     const cached = memoryCache.get(cacheKey)!;
     if (Date.now() - cached.timestamp < CACHE_TTL_MS) {
@@ -68,31 +68,33 @@ async function fetchWithCache(url: string, options: any = {}) {
 
   while (attempt <= maxRetries) {
     const resp = await fetch(url, options);
-    
+
     if (resp.status === 429) {
       if (attempt === maxRetries) {
         throw { message: "429_EXHAUSTED", lastRetryAfter };
       }
-      
+
       let retryAfterSeconds = 10;
       try {
         const body = await resp.json();
         retryAfterSeconds = body.retryAfterSeconds || 10;
-      } catch(e) {}
-      
+      } catch (e) {}
+
       lastRetryAfter = retryAfterSeconds;
-      
+
       let backoff = retryAfterSeconds * Math.pow(2, attempt);
       const jitter = backoff * 0.2;
       backoff = backoff + (Math.random() * 2 * jitter - jitter);
-      
-      console.log(`[retry ${attempt + 1}/${maxRetries}] waiting ${Math.round(backoff)}s before retrying GET ${url}`);
-      
-      await new Promise(resolve => setTimeout(resolve, backoff * 1000));
+
+      console.log(
+        `[retry ${attempt + 1}/${maxRetries}] waiting ${Math.round(backoff)}s before retrying GET ${url}`,
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, backoff * 1000));
       attempt++;
       continue;
     }
-    
+
     if (resp.ok) {
       const data = await resp.json();
       memoryCache.set(cacheKey, { timestamp: Date.now(), data });
@@ -105,31 +107,46 @@ async function fetchWithCache(url: string, options: any = {}) {
 
 // Keywords guard
 const RENTPI_KEYWORDS = [
-  "rental", "product", "category", "price", "discount", "available", "availability",
-  "renter", "owner", "rentpi", "booking", "gear", "surge", "peak", "trending", "rent"
+  "rental",
+  "product",
+  "category",
+  "price",
+  "discount",
+  "available",
+  "availability",
+  "renter",
+  "owner",
+  "rentpi",
+  "booking",
+  "gear",
+  "surge",
+  "peak",
+  "trending",
+  "rent",
 ];
 
 function isOnTopic(message: string) {
   const lower = message.toLowerCase();
-  return RENTPI_KEYWORDS.some(kw => lower.includes(kw));
+  return RENTPI_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
 // Routes
-app.get('/status', (req: Request, res: Response) => {
-  res.json({ service: 'agentic-service', status: 'OK' });
+app.get("/status", (req: Request, res: Response) => {
+  res.json({ service: "agentic-service", status: "OK" });
 });
 
-app.post('/chat', async (req: Request, res: Response): Promise<any> => {
+app.post("/chat", async (req: Request, res: Response): Promise<any> => {
   const { sessionId, message } = req.body;
   if (!sessionId || !message) {
-    return res.status(400).json({ error: 'sessionId and message are required' });
+    return res.status(400).json({ error: "sessionId and message are required" });
   }
 
   // Step 1: Keyword Guard
   if (!isOnTopic(message)) {
-    return res.json({ 
-      sessionId, 
-      reply: "I can only help with RentPi related questions such as products, rentals, availability, pricing, and trends." 
+    return res.json({
+      sessionId,
+      reply:
+        "I can only help with RentPi related questions such as products, rentals, availability, pricing, and trends.",
     });
   }
 
@@ -146,18 +163,18 @@ app.post('/chat', async (req: Request, res: Response): Promise<any> => {
       console.error("DB error fetching history", err);
     }
 
-    const geminiHistory = historyDocs.map(doc => ({
-      role: doc.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: doc.content }]
+    const geminiHistory = historyDocs.map((doc) => ({
+      role: doc.role === "assistant" ? "model" : "user",
+      parts: [{ text: doc.content }],
     }));
 
     // Step 3: Intent & Grounding Data
     let groundingData: any = null;
     let params: any = { intent: "none" };
-    
+
     try {
-        const extractorPrompt = `Extract API parameters from this message: "${message}". 
-Today's date is ${new Date().toISOString().split('T')[0]}.
+      const extractorPrompt = `Extract API parameters from this message: "${message}". 
+Today's date is ${new Date().toISOString().split("T")[0]}.
 Respond ONLY with JSON. No markdown formatting.
 Format:
 - Product availability: {"intent": "availability", "productId": 1, "from": "YYYY-MM-DD", "to": "YYYY-MM-DD"}
@@ -169,50 +186,58 @@ Format:
 - Otherwise: {"intent": "none"}
 Make sure dates are strictly formatted.`;
 
-        const extModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-        const extResult = await extModel.generateContent(extractorPrompt);
-        params = JSON.parse(extResult.response.text().trim().replace(/```json|```/gi, ''));
-    } catch(e) {
-        console.error("Param extraction failed, fallback to keyword", e);
-        const lowerMessage = message.toLowerCase();
-        if (lowerMessage.includes("category")) params.intent = "category";
-        else if (lowerMessage.includes("available")) params = { intent: "availability", productId: 1, from: "2024-01-01", to: "2024-12-31" };
-        else if (lowerMessage.includes("trending")) params = { intent: "trending", date: new Date().toISOString().split('T')[0] };
-        else if (lowerMessage.includes("surge")) params = { intent: "surge", month: new Date().toISOString().substring(0, 7) };
-        else if (lowerMessage.includes("peak")) params = { intent: "peak", from: "2024-01", to: "2024-06" };
-        else if (lowerMessage.includes("discount")) params = { intent: "discount", userId: 1 };
+      const extModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const extResult = await extModel.generateContent(extractorPrompt);
+      params = JSON.parse(
+        extResult.response
+          .text()
+          .trim()
+          .replace(/```json|```/gi, ""),
+      );
+    } catch (e) {
+      console.error("Param extraction failed, fallback to keyword", e);
+      const lowerMessage = message.toLowerCase();
+      if (lowerMessage.includes("category")) params.intent = "category";
+      else if (lowerMessage.includes("available"))
+        params = { intent: "availability", productId: 1, from: "2024-01-01", to: "2024-12-31" };
+      else if (lowerMessage.includes("trending"))
+        params = { intent: "trending", date: new Date().toISOString().split("T")[0] };
+      else if (lowerMessage.includes("surge"))
+        params = { intent: "surge", month: new Date().toISOString().substring(0, 7) };
+      else if (lowerMessage.includes("peak"))
+        params = { intent: "peak", from: "2024-01", to: "2024-06" };
+      else if (lowerMessage.includes("discount")) params = { intent: "discount", userId: 1 };
     }
 
     try {
       if (params.intent === "category") {
         const url = `${CENTRAL_API_URL}/api/data/rentals/stats?group_by=category`;
-        const resp = await fetchWithCache(url, { headers: { 'Authorization': `Bearer ${CENTRAL_API_TOKEN}` } });
+        const resp = await fetchWithCache(url, {
+          headers: { Authorization: `Bearer ${CENTRAL_API_TOKEN}` },
+        });
         if (resp.ok) groundingData = await resp.json();
-      } 
-      else if (params.intent === "availability") {
+      } else if (params.intent === "availability") {
         // Space for future gRPC implementation with rental-service
-        const url = `${RENTAL_SERVICE_URL}/rentals/products/${params.productId || 1}/availability?from=${params.from || '2024-01-01'}&to=${params.to || '2024-12-31'}`;
+        const url = `${RENTAL_SERVICE_URL}/rentals/products/${params.productId || 1}/availability?from=${params.from || "2024-01-01"}&to=${params.to || "2024-12-31"}`;
         const resp = await fetchWithCache(url);
         if (resp.ok) groundingData = await resp.json();
-      }
-      else if (params.intent === "trending") {
-        const url = `${ANALYTICS_SERVICE_URL}/analytics/recommendations?date=${params.date || new Date().toISOString().split('T')[0]}&limit=5`;
+      } else if (params.intent === "trending") {
+        const url = `${ANALYTICS_SERVICE_URL}/analytics/recommendations?date=${params.date || new Date().toISOString().split("T")[0]}&limit=5`;
         const resp = await fetchWithCache(url);
         if (resp.ok) groundingData = await resp.json();
-      }
-      else if (params.intent === "surge") {
+      } else if (params.intent === "surge") {
         const url = `${ANALYTICS_SERVICE_URL}/analytics/surge-days?month=${params.month || new Date().toISOString().substring(0, 7)}`;
         const resp = await fetchWithCache(url);
         if (resp.ok) groundingData = await resp.json();
-      }
-      else if (params.intent === "peak") {
-        const url = `${ANALYTICS_SERVICE_URL}/analytics/peak-window?from=${params.from || '2024-01'}&to=${params.to || '2024-06'}`;
+      } else if (params.intent === "peak") {
+        const url = `${ANALYTICS_SERVICE_URL}/analytics/peak-window?from=${params.from || "2024-01"}&to=${params.to || "2024-06"}`;
         const resp = await fetchWithCache(url);
         if (resp.ok) groundingData = await resp.json();
-      }
-      else if (params.intent === "discount") {
+      } else if (params.intent === "discount") {
         const url = `${CENTRAL_API_URL}/api/data/users/${params.userId || 1}`;
-        const resp = await fetchWithCache(url, { headers: { 'Authorization': `Bearer ${CENTRAL_API_TOKEN}` } });
+        const resp = await fetchWithCache(url, {
+          headers: { Authorization: `Bearer ${CENTRAL_API_TOKEN}` },
+        });
         if (resp.ok) groundingData = await resp.json();
       }
     } catch (err: any) {
@@ -220,7 +245,7 @@ Make sure dates are strictly formatted.`;
         return res.status(503).json({
           error: "Central API unavailable after 3 retries",
           lastRetryAfter: err.lastRetryAfter,
-          suggestion: "Try again in ~2 minutes"
+          suggestion: "Try again in ~2 minutes",
         });
       }
       console.error("Error fetching grounding data", err);
@@ -252,12 +277,12 @@ User Question: ${message}`;
     // Step 5: Call Gemini
     let assistantReply = "";
     try {
-      const model = genAI.getGenerativeModel({ 
+      const model = genAI.getGenerativeModel({
         model: "gemini-2.5-flash",
         systemInstruction,
-        generationConfig: { temperature: 0.1 }
+        generationConfig: { temperature: 0.1 },
       });
-      
+
       const chat = model.startChat({
         history: geminiHistory,
       });
@@ -274,7 +299,7 @@ User Question: ${message}`;
       if (messagesCollection && sessionsCollection) {
         await messagesCollection.insertMany([
           { sessionId, role: "user", content: message, timestamp: now },
-          { sessionId, role: "assistant", content: assistantReply, timestamp: new Date() }
+          { sessionId, role: "assistant", content: assistantReply, timestamp: new Date() },
         ]);
 
         const session = await sessionsCollection.findOne({ sessionId });
@@ -284,7 +309,7 @@ User Question: ${message}`;
             const titleModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
             const titlePrompt = `Give a short 3-5 word title for a chat conversation that starts with this message: "${message}". Reply with ONLY the title. No punctuation, no quotes.`;
             const titleResult = await titleModel.generateContent(titlePrompt);
-            sessionName = titleResult.response.text().trim().replace(/['"]/g, '');
+            sessionName = titleResult.response.text().trim().replace(/['"]/g, "");
           } catch (err) {
             console.error("Error generating session title:", err);
           }
@@ -293,12 +318,12 @@ User Question: ${message}`;
             sessionId,
             name: sessionName,
             createdAt: now,
-            lastMessageAt: new Date()
+            lastMessageAt: new Date(),
           });
         } else {
           await sessionsCollection.updateOne(
             { sessionId },
-            { $set: { lastMessageAt: new Date() } }
+            { $set: { lastMessageAt: new Date() } },
           );
         }
       }
@@ -308,14 +333,13 @@ User Question: ${message}`;
 
     // Step 7: Return Response
     res.json({ sessionId, reply: assistantReply });
-
   } catch (err) {
     console.error("Unexpected error in /chat:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-app.get('/chat/sessions', async (req: Request, res: Response): Promise<any> => {
+app.get("/chat/sessions", async (req: Request, res: Response): Promise<any> => {
   try {
     if (!sessionsCollection) return res.json({ sessions: [] });
     const sessions = await sessionsCollection.find({}).sort({ lastMessageAt: -1 }).toArray();
@@ -323,53 +347,54 @@ app.get('/chat/sessions', async (req: Request, res: Response): Promise<any> => {
       sessions: sessions.map((s: any) => ({
         sessionId: s.sessionId,
         name: s.name,
-        lastMessageAt: s.lastMessageAt
-      }))
+        lastMessageAt: s.lastMessageAt,
+      })),
     });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch sessions' });
+    res.status(500).json({ error: "Failed to fetch sessions" });
   }
 });
 
-app.get('/chat/:sessionId/history', async (req: Request, res: Response): Promise<any> => {
+app.get("/chat/:sessionId/history", async (req: Request, res: Response): Promise<any> => {
   const { sessionId } = req.params;
   try {
-    if (!sessionsCollection || !messagesCollection) return res.status(500).json({ error: 'DB not connected' });
-    
+    if (!sessionsCollection || !messagesCollection)
+      return res.status(500).json({ error: "DB not connected" });
+
     const session = await sessionsCollection.findOne({ sessionId });
     if (!session) {
-      return res.status(404).json({ error: 'Session not found' });
+      return res.status(404).json({ error: "Session not found" });
     }
 
     const messages = await messagesCollection.find({ sessionId }).sort({ timestamp: 1 }).toArray();
-    
+
     res.json({
       sessionId: session.sessionId,
       name: session.name,
       messages: messages.map((m: any) => ({
         role: m.role,
         content: m.content,
-        timestamp: m.timestamp
-      }))
+        timestamp: m.timestamp,
+      })),
     });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch history' });
+    res.status(500).json({ error: "Failed to fetch history" });
   }
 });
 
-app.delete('/chat/:sessionId', async (req: Request, res: Response): Promise<any> => {
+app.delete("/chat/:sessionId", async (req: Request, res: Response): Promise<any> => {
   const { sessionId } = req.params;
   try {
-    if (!sessionsCollection) return res.status(500).json({ error: 'DB not connected' });
+    if (!sessionsCollection) return res.status(500).json({ error: "DB not connected" });
     const result = await sessionsCollection.deleteOne({ sessionId });
     if (result.deletedCount === 0) {
-      return res.status(404).json({ error: 'Session not found' });
+      return res.status(404).json({ error: "Session not found" });
     }
-    
+
     await messagesCollection.deleteMany({ sessionId });
     res.json({ deleted: true });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to delete session' });
+    res.status(500).json({ error: "Failed to delete session" });
   }
 });
 
