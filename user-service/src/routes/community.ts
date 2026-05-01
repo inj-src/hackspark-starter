@@ -1,4 +1,4 @@
-import { Hono } from 'hono'
+import { type Context, Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { HTTPException } from 'hono/http-exception'
@@ -29,7 +29,7 @@ const communityRouter = new Hono<{ Variables: Variables }>()
 
 const posts: CommunityPost[] = []
 
-function parseUserFromJwt(c: Parameters<typeof communityRouter.get>[1] extends never ? never : any) {
+function parseUserFromJwt(c: Context<{ Variables: Variables }>) {
   const payload = c.get('jwtPayload') as {
     sub?: string
     name?: string
@@ -46,7 +46,7 @@ function parseUserFromJwt(c: Parameters<typeof communityRouter.get>[1] extends n
   }
 }
 
-communityRouter.get('/posts', (c) => {
+const listPostsHandler = (c: Context<{ Variables: Variables }>) => {
   const feed = posts
     .map((post) => ({
       id: post.id,
@@ -59,12 +59,48 @@ communityRouter.get('/posts', (c) => {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 
   return c.json({ posts: feed })
-})
+}
+
+communityRouter.get('/posts', listPostsHandler)
+communityRouter.get('/', listPostsHandler)
 
 communityRouter.use('/posts', jwt({ secret: config.JWT_SECRET, alg: 'HS256' }))
 communityRouter.use('/posts/*', jwt({ secret: config.JWT_SECRET, alg: 'HS256' }))
+communityRouter.use('/', jwt({ secret: config.JWT_SECRET, alg: 'HS256' }))
+communityRouter.use('/*', jwt({ secret: config.JWT_SECRET, alg: 'HS256' }))
 
 communityRouter.post('/posts', zValidator('json', createPostSchema), (c) => {
+  const user = parseUserFromJwt(c)
+  const payload = c.req.valid('json')
+
+  const post: CommunityPost = {
+    id: crypto.randomUUID(),
+    authorId: user.id,
+    authorName: user.name,
+    body: payload.body,
+    createdAt: new Date().toISOString(),
+    likes: 0,
+    likedBy: [],
+  }
+
+  posts.unshift(post)
+
+  return c.json(
+    {
+      post: {
+        id: post.id,
+        authorId: post.authorId,
+        authorName: post.authorName,
+        body: post.body,
+        createdAt: post.createdAt,
+        likes: post.likes,
+      },
+    },
+    201
+  )
+})
+
+communityRouter.post('/', zValidator('json', createPostSchema), (c) => {
   const user = parseUserFromJwt(c)
   const payload = c.req.valid('json')
 
@@ -117,7 +153,51 @@ communityRouter.post('/posts/:id/like', zValidator('param', postIdParamSchema), 
   })
 })
 
+communityRouter.post('/:id/like', zValidator('param', postIdParamSchema), (c) => {
+  const user = parseUserFromJwt(c)
+  const { id } = c.req.valid('param')
+  const post = posts.find((entry) => entry.id === id)
+
+  if (!post) {
+    throw new HTTPException(404, { message: 'Post not found' })
+  }
+
+  if (!post.likedBy.includes(user.id)) {
+    post.likedBy.push(user.id)
+    post.likes += 1
+  }
+
+  return c.json({
+    post: {
+      id: post.id,
+      likes: post.likes,
+    },
+  })
+})
+
 communityRouter.post('/posts/:id/unlike', zValidator('param', postIdParamSchema), (c) => {
+  const user = parseUserFromJwt(c)
+  const { id } = c.req.valid('param')
+  const post = posts.find((entry) => entry.id === id)
+
+  if (!post) {
+    throw new HTTPException(404, { message: 'Post not found' })
+  }
+
+  if (post.likedBy.includes(user.id)) {
+    post.likedBy = post.likedBy.filter((userId) => userId !== user.id)
+    post.likes = Math.max(0, post.likes - 1)
+  }
+
+  return c.json({
+    post: {
+      id: post.id,
+      likes: post.likes,
+    },
+  })
+})
+
+communityRouter.post('/:id/unlike', zValidator('param', postIdParamSchema), (c) => {
   const user = parseUserFromJwt(c)
   const { id } = c.req.valid('param')
   const post = posts.find((entry) => entry.id === id)

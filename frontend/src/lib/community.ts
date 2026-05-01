@@ -28,7 +28,7 @@ async function parseJson<T>(response: Response): Promise<T> {
   return data as T;
 }
 
-function authHeaders() {
+function authHeaders(): Record<string, string> {
   const token = getStoredToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }

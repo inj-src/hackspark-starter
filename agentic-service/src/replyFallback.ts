@@ -4,6 +4,18 @@ function asObj(v: unknown): Record<string, any> | null {
   return v && typeof v === 'object' ? (v as Record<string, any>) : null;
 }
 
+function fmtPrice(v: unknown): string {
+  const n = typeof v === 'number' ? v : Number(v);
+  if (!Number.isFinite(n)) return 'N/A';
+  return `$${n.toFixed(2)}/day`;
+}
+
+function productLine(p: any): string {
+  const name = p?.name ?? `Product #${p?.id ?? 'N/A'}`;
+  const category = p?.category ?? 'UNKNOWN';
+  return `${name} (${category}) — ${fmtPrice(p?.pricePerDay)}`;
+}
+
 export function buildFallbackReply(params: IntentParams, groundingData: unknown): string {
   if (!groundingData) return 'Grounding data is unavailable right now, so I cannot provide a factual answer.';
 
@@ -17,6 +29,24 @@ export function buildFallbackReply(params: IntentParams, groundingData: unknown)
     const busy = Array.isArray(a.busyPeriods) ? a.busyPeriods.slice(0, 2) : [];
     const windows = Array.isArray(a.freeWindows) ? a.freeWindows.slice(0, 2) : [];
     return `This item is not fully available in that range. Busy: ${JSON.stringify(busy)}. Free windows: ${JSON.stringify(windows)}.`;
+  }
+
+  if (params.intent === 'browse') {
+    const matching = Array.isArray(obj.matchingProducts) ? obj.matchingProducts : [];
+    if (matching.length === 0) return 'I could not find matching products right now.';
+    const top = matching.slice(0, 5).map(productLine).join('; ');
+    return `Yes, there are matching products: ${top}.`;
+  }
+
+  if (params.intent === 'product_info') {
+    const p = asObj(obj.product);
+    if (!p) return 'I could not find that product right now.';
+    const availability = obj.availability && typeof obj.availability.available === 'boolean'
+      ? obj.availability.available
+        ? ' It is currently available for the requested range.'
+        : ' It is currently not fully available for the requested range.'
+      : '';
+    return `${productLine(p)}.${availability}`;
   }
 
   if (params.intent === 'category' && Array.isArray(obj.data)) {
@@ -50,5 +80,5 @@ export function buildFallbackReply(params: IntentParams, groundingData: unknown)
     return `Peak 7-day window is ${p.from} to ${p.to} with ${p.totalRentals} rentals.`;
   }
 
-  return `Grounded data: ${JSON.stringify(groundingData).slice(0, 280)}.`;
+  return 'I fetched data, but could not format a confident answer from it yet.';
 }

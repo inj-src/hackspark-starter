@@ -12,6 +12,7 @@ app.use('*', logger())
 app.route('/status', statusRouter)
 app.route('/users', usersRouter)
 app.route('/community', communityRouter)
+app.route('/posts', communityRouter)
 
 app.notFound((c) => c.json({ error: 'Not Found' }, 404))
 

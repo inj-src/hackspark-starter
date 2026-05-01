@@ -1,5 +1,3 @@
-import { isCacheOnlyMode } from "./env.js";
-
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -91,16 +89,6 @@ export class CentralApiClient {
   }
 
   private async fetchJsonWithRateLimit<T>(pathWithQuery: string): Promise<ClientResult<T>> {
-    if (isCacheOnlyMode()) {
-      return {
-        ok: false,
-        status: 503,
-        error: "Central API is disabled in RENTAL_CACHE_ONLY mode",
-        headers: { limit: null, remaining: null, reset: null },
-        waitMs: 0,
-      };
-    }
-
     for (let attempt = 1; attempt <= 5; attempt += 1) {
       const waitMs = await this.acquireToken();
       const url = `${this.baseUrl}${pathWithQuery}`;

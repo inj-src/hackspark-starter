@@ -1,13 +1,17 @@
 import { Hono } from "hono";
-import { getCache } from "../state.js";
-import type { Rental } from "../types.js";
 import { CentralApiClient } from "../lib/central-client.js";
+import type { Product, Rental } from "../types.js";
 
 const DAY_MS = 86_400_000;
 const monthRegex = /^\d{4}-(0[1-9]|1[0-2])$/;
 const dateRegex = /^\d{4}-(0[1-9]|1[0-2])-([0-2]\d|3[0-1])$/;
 
 export const analyticsRoute = new Hono();
+
+const client = new CentralApiClient(
+  process.env.CENTRAL_API_URL || "https://technocracy.brittoo.xyz",
+  process.env.CENTRAL_API_TOKEN || "",
+);
 
 function toUtcDate(s: string): Date {
   return new Date(`${s}T00:00:00.000Z`);
@@ -37,13 +41,39 @@ function validateDate(date: string): { ok: true; date: Date } | { ok: false; err
 function buildCountMap(rentals: Iterable<Rental>): Map<string, number> {
   const map = new Map<string, number>();
   for (const rental of rentals) {
-    const date = rental.rentalStart.slice(0, 10);
-    map.set(date, (map.get(date) ?? 0) + 1);
+    const day = rental.rentalStart.slice(0, 10);
+    map.set(day, (map.get(day) ?? 0) + 1);
   }
   return map;
 }
 
-analyticsRoute.get("/analytics/peak-window", (c) => {
+async function fetchRentals(query: string): Promise<{ ok: true; data: Rental[] } | { ok: false; status: number; error: string }> {
+  const all: Rental[] = [];
+  let page = 1;
+  while (true) {
+    const res = await client.getJson<{ data?: Rental[] }>(`/api/data/rentals?${query}&page=${page}&limit=100`);
+    if (!res.ok) return { ok: false, status: res.status, error: res.error ?? "unknown" };
+    const rows = Array.isArray(res.data?.data) ? res.data.data : [];
+    all.push(...rows);
+    if (rows.length < 100) break;
+    page += 1;
+  }
+  return { ok: true, data: all };
+}
+
+async function fetchProductsByIds(ids: number[]): Promise<Map<number, Product>> {
+  const byId = new Map<number, Product>();
+  for (let i = 0; i < ids.length; i += 50) {
+    const batch = ids.slice(i, i + 50);
+    const res = await client.getJson<{ data?: Product[] }>(`/api/data/products/batch?ids=${batch.join(",")}`);
+    if (!res.ok) continue;
+    const rows = Array.isArray(res.data?.data) ? res.data.data : [];
+    for (const p of rows) byId.set(p.id, p);
+  }
+  return byId;
+}
+
+analyticsRoute.get("/analytics/peak-window", async (c) => {
   const from = c.req.query("from");
   const to = c.req.query("to");
   if (!from || !to) return c.json({ error: "from and to are required in YYYY-MM" }, 400);
@@ -63,7 +93,10 @@ analyticsRoute.get("/analytics/peak-window", (c) => {
   const totalDays = Math.floor((end.getTime() - start.getTime()) / DAY_MS) + 1;
   if (totalDays < 7) return c.json({ error: "date range must include at least 7 days" }, 400);
 
-  const counts = buildCountMap(getCache().rentalById.values());
+  const rentalsRes = await fetchRentals(`from=${formatDate(start)}&to=${formatDate(end)}`);
+  if (!rentalsRes.ok) return c.json({ error: "central api request failed", message: rentalsRes.error }, rentalsRes.status as never);
+
+  const counts = buildCountMap(rentalsRes.data);
   const days: { date: string; count: number }[] = [];
   for (let t = start.getTime(); t <= end.getTime(); t += DAY_MS) {
     const d = formatDate(new Date(t));
@@ -94,14 +127,19 @@ analyticsRoute.get("/analytics/peak-window", (c) => {
   });
 });
 
-analyticsRoute.get("/analytics/surge-days", (c) => {
+analyticsRoute.get("/analytics/surge-days", async (c) => {
   const month = c.req.query("month");
   if (!month) return c.json({ error: "month is required in YYYY-MM" }, 400);
 
   const check = validateMonth(month);
   if (!check.ok) return c.json({ error: check.error }, 400);
 
-  const countsMap = buildCountMap(getCache().rentalById.values());
+  const from = `${month}-01`;
+  const to = `${month}-${String(daysInMonth(check.year, check.month)).padStart(2, "0")}`;
+  const rentalsRes = await fetchRentals(`from=${from}&to=${to}`);
+  if (!rentalsRes.ok) return c.json({ error: "central api request failed", message: rentalsRes.error }, rentalsRes.status as never);
+
+  const countsMap = buildCountMap(rentalsRes.data);
   const total = daysInMonth(check.year, check.month);
   const days = Array.from({ length: total }, (_, i) => {
     const date = `${month}-${String(i + 1).padStart(2, "0")}`;
@@ -147,22 +185,20 @@ analyticsRoute.get("/analytics/recommendations", async (c) => {
   }
 
   const base = dateCheck.date;
-  const baseYear = base.getUTCFullYear();
-  const cache = getCache();
-  const scores = new Map<number, number>();
-
-  const windows = [baseYear - 1, baseYear - 2].map((y) => {
+  const windows = [base.getUTCFullYear() - 1, base.getUTCFullYear() - 2].map((y) => {
     const anchor = new Date(Date.UTC(y, base.getUTCMonth(), base.getUTCDate()));
     const start = new Date(anchor.getTime() - 7 * DAY_MS);
     const end = new Date(anchor.getTime() + 7 * DAY_MS);
-    return { start, end };
+    return { from: formatDate(start), to: formatDate(end) };
   });
 
-  for (const rental of cache.rentalById.values()) {
-    const startDate = new Date(rental.rentalStart);
-    const inWindow = windows.some((w) => startDate.getTime() >= w.start.getTime() && startDate.getTime() <= w.end.getTime());
-    if (!inWindow) continue;
-    scores.set(rental.productId, (scores.get(rental.productId) ?? 0) + 1);
+  const scores = new Map<number, number>();
+  for (const w of windows) {
+    const rentalsRes = await fetchRentals(`from=${w.from}&to=${w.to}`);
+    if (!rentalsRes.ok) return c.json({ error: "central api request failed", message: rentalsRes.error }, rentalsRes.status as never);
+    for (const rental of rentalsRes.data) {
+      scores.set(rental.productId, (scores.get(rental.productId) ?? 0) + 1);
+    }
   }
 
   const rawRecommendations = Array.from(scores.entries())
@@ -170,48 +206,34 @@ analyticsRoute.get("/analytics/recommendations", async (c) => {
     .slice(0, limit)
     .map(([productId, score]) => ({ productId, score }));
 
-  const missingIds = rawRecommendations
-    .filter((r) => !cache.productById.has(r.productId))
-    .map((r) => r.productId);
-
-  if (missingIds.length > 0) {
-    const client = new CentralApiClient(
-      process.env.CENTRAL_API_URL || "https://technocracy.brittoo.xyz",
-      process.env.CENTRAL_API_TOKEN || ""
-    );
-    const res = await client.getJson<any>(`/api/data/products/batch?ids=${missingIds.join(",")}`);
-    const products = Array.isArray(res.data) ? res.data : res.data?.data;
-    if (res.ok && Array.isArray(products)) {
-      for (const p of products) {
-        cache.productById.set(p.id, p);
-      }
-    }
-  }
-
+  const products = await fetchProductsByIds(rawRecommendations.map((x) => x.productId));
   const recommendations = rawRecommendations.map((r) => {
-    const p = cache.productById.get(r.productId);
-    return {
-      productId: r.productId,
-      name: p?.name ?? `Product #${r.productId}`,
-      category: p?.category ?? "UNKNOWN",
-      score: r.score,
-    };
+    const p = products.get(r.productId);
+    return { productId: r.productId, name: p?.name ?? `Product #${r.productId}`, category: p?.category ?? "UNKNOWN", score: r.score };
   });
 
   return c.json({ date, recommendations });
 });
 
-analyticsRoute.get("/analytics/search", (c) => {
+analyticsRoute.get("/analytics/search", async (c) => {
   const q = c.req.query("q")?.toLowerCase();
   if (!q) return c.json({ error: "query q is required" }, 400);
 
-  const results = Array.from(getCache().productById.values())
-    .filter((p) => 
-      p.name.toLowerCase().includes(q) || 
-      p.category.toLowerCase().includes(q)
-    )
-    .slice(0, 10);
+  const results: Product[] = [];
+  let page = 1;
+  while (results.length < 10) {
+    const res = await client.getJson<{ data?: Product[] }>(`/api/data/products?page=${page}&limit=100`);
+    if (!res.ok) return c.json({ error: "central api request failed", message: res.error ?? "unknown" }, res.status as never);
+    const rows = Array.isArray(res.data?.data) ? res.data.data : [];
+    if (rows.length === 0) break;
+    for (const p of rows) {
+      if (p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q)) {
+        results.push(p);
+      }
+      if (results.length >= 10) break;
+    }
+    page += 1;
+  }
 
   return c.json({ query: q, results });
 });
-

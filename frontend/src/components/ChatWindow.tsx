@@ -18,7 +18,6 @@ interface ChatWindowProps {
 const QUICK_PROMPTS = [
   'is there any portable station available?',
   'is there any cycle available?',
-  'what do you know about Pro Tool #7',
 ];
 
 function createSessionId() {

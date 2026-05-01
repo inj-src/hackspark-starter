@@ -1,13 +1,41 @@
 import { Hono } from "hono";
-import { getCache } from "../state.js";
 import { MinHeap } from "../lib/min-heap.js";
+import { getCentralClient } from "../lib/central.js";
 import { addDays, daysBetweenInclusive, daysInMonth, parseMonth, toUtcDate, toYmd } from "../lib/date.js";
+import type { Product, Rental } from "../types.js";
 
 type Interval = { start: Date; end: Date };
 type Ranked = { key: string; count: number };
 type FeedNode = { rentalId: number; productId: number; rentalStart: string; rentalEnd: string; stream: number; idx: number };
 
 export const insightsRoute = new Hono();
+
+async function fetchRentals(query: string): Promise<{ ok: true; data: Rental[] } | { ok: false; status: number; error: string }> {
+  const data: Rental[] = [];
+  let page = 1;
+  while (true) {
+    const res = await getCentralClient().getJson<{ data?: Rental[] }>(`/api/data/rentals?${query}&page=${page}&limit=100`);
+    if (!res.ok) return { ok: false, status: res.status, error: res.error ?? "unknown" };
+    const rows = Array.isArray(res.data?.data) ? res.data.data : [];
+    data.push(...rows);
+    if (rows.length < 100) break;
+    page += 1;
+  }
+  return { ok: true, data };
+}
+
+async function fetchProductsByIds(ids: number[]): Promise<Map<number, Product>> {
+  const byId = new Map<number, Product>();
+  if (ids.length === 0) return byId;
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50);
+    const res = await getCentralClient().getJson<{ data?: Product[] }>(`/api/data/products/batch?ids=${chunk.join(",")}`);
+    if (!res.ok) continue;
+    const rows = Array.isArray(res.data?.data) ? res.data.data : [];
+    for (const p of rows) byId.set(p.id, p);
+  }
+  return byId;
+}
 
 function cmpWorse(a: Ranked, b: Ranked): number {
   if (a.count !== b.count) return a.count - b.count;
@@ -38,7 +66,7 @@ function mergeIntervals(items: Interval[]): Interval[] {
   return merged;
 }
 
-insightsRoute.get("/rentals/kth-busiest-date", (c) => {
+insightsRoute.get("/rentals/kth-busiest-date", async (c) => {
   const from = c.req.query("from");
   const to = c.req.query("to");
   const kRaw = c.req.query("k");
@@ -55,8 +83,11 @@ insightsRoute.get("/rentals/kth-busiest-date", (c) => {
 
   const start = toUtcDate(`${from}-01`);
   const end = toUtcDate(`${to}-${String(daysInMonth(toM.year, toM.month)).padStart(2, "0")}`);
+  const rentalsRes = await fetchRentals(`from=${toYmd(start)}&to=${toYmd(end)}`);
+  if (!rentalsRes.ok) return c.json({ error: "central api request failed", message: rentalsRes.error }, rentalsRes.status as never);
+
   const counts = new Map<string, number>();
-  for (const rental of getCache().rentalById.values()) {
+  for (const rental of rentalsRes.data) {
     const key = rental.rentalStart.slice(0, 10);
     const d = toUtcDate(key);
     if (d < start || d > end) continue;
@@ -80,17 +111,20 @@ insightsRoute.get("/rentals/kth-busiest-date", (c) => {
   return c.json({ from, to, k, date: kth.key, rentalCount: kth.count });
 });
 
-insightsRoute.get("/rentals/users/:id/top-categories", (c) => {
+insightsRoute.get("/rentals/users/:id/top-categories", async (c) => {
   const userId = Number(c.req.param("id"));
   if (!Number.isInteger(userId) || userId <= 0) return c.json({ error: "user id must be a positive integer" }, 400);
   const kRaw = c.req.query("k") ?? "5";
   const k = Number(kRaw);
   if (!Number.isInteger(k) || k <= 0) return c.json({ error: "k must be a positive integer" }, 400);
 
+  const rentalsRes = await fetchRentals(`renter_id=${userId}`);
+  if (!rentalsRes.ok) return c.json({ error: "central api request failed", message: rentalsRes.error }, rentalsRes.status as never);
+  const products = await fetchProductsByIds(Array.from(new Set(rentalsRes.data.map((x) => x.productId))));
+
   const counts = new Map<string, number>();
-  for (const rental of getCache().rentalById.values()) {
-    if (rental.renterId !== userId) continue;
-    const category = getCache().productById.get(rental.productId)?.category;
+  for (const rental of rentalsRes.data) {
+    const category = products.get(rental.productId)?.category;
     if (!category) continue;
     counts.set(category, (counts.get(category) ?? 0) + 1);
   }
@@ -115,7 +149,7 @@ insightsRoute.get("/rentals/users/:id/top-categories", (c) => {
   return c.json({ userId, topCategories: top });
 });
 
-insightsRoute.get("/rentals/products/:id/free-streak", (c) => {
+insightsRoute.get("/rentals/products/:id/free-streak", async (c) => {
   const productId = Number(c.req.param("id"));
   const yearRaw = c.req.query("year");
   if (!Number.isInteger(productId) || productId <= 0) return c.json({ error: "product id must be a positive integer" }, 400);
@@ -124,8 +158,10 @@ insightsRoute.get("/rentals/products/:id/free-streak", (c) => {
 
   const yearStart = toUtcDate(`${year}-01-01`);
   const yearEnd = toUtcDate(`${year}-12-31`);
+  const rentalsRes = await fetchRentals(`product_id=${productId}&from=${year}-01-01&to=${year}-12-31`);
+  if (!rentalsRes.ok) return c.json({ error: "central api request failed", message: rentalsRes.error }, rentalsRes.status as never);
   const intervals: Interval[] = [];
-  for (const rental of getCache().rentalsByProductId.get(productId) ?? []) {
+  for (const rental of rentalsRes.data) {
     const s = new Date(rental.rentalStart);
     const e = new Date(rental.rentalEnd);
     const start = s < yearStart ? yearStart : new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate()));
@@ -161,7 +197,7 @@ insightsRoute.get("/rentals/products/:id/free-streak", (c) => {
   return c.json({ productId, year, longestFreeStreak: { from: toYmd(bestStart), to: toYmd(bestEnd), days: daysBetweenInclusive(bestStart, bestEnd) } });
 });
 
-insightsRoute.get("/rentals/merged-feed", (c) => {
+insightsRoute.get("/rentals/merged-feed", async (c) => {
   const idsRaw = c.req.query("productIds");
   if (!idsRaw) return c.json({ error: "productIds is required" }, 400);
   const parsed = idsRaw.split(",").map((x) => Number(x.trim())).filter((x) => Number.isInteger(x) && x > 0);
@@ -172,12 +208,19 @@ insightsRoute.get("/rentals/merged-feed", (c) => {
   const limit = Number(limitRaw);
   if (!Number.isInteger(limit) || limit <= 0) return c.json({ error: "limit must be a positive integer" }, 400);
 
-  const streams = dedup.map((id) => (getCache().rentalsByProductId.get(id) ?? []).map((r) => ({
-    rentalId: r.id,
-    productId: r.productId,
-    rentalStart: r.rentalStart.slice(0, 10),
-    rentalEnd: r.rentalEnd.slice(0, 10),
-  })));
+  const streams: Array<Array<{ rentalId: number; productId: number; rentalStart: string; rentalEnd: string }>> = [];
+  for (const id of dedup) {
+    const rentalsRes = await fetchRentals(`product_id=${id}`);
+    if (!rentalsRes.ok) return c.json({ error: "central api request failed", message: rentalsRes.error }, rentalsRes.status as never);
+    streams.push(
+      rentalsRes.data.map((r) => ({
+        rentalId: r.id,
+        productId: r.productId,
+        rentalStart: r.rentalStart.slice(0, 10),
+        rentalEnd: r.rentalEnd.slice(0, 10),
+      })),
+    );
+  }
 
   const heap = new MinHeap<FeedNode>(cmpFeed);
   streams.forEach((rows, stream) => {
