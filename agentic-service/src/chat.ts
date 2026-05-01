@@ -27,14 +27,14 @@ const SYNONYMS: Record<string, string> = {
   tent: "outdoor",
 };
 
-const systemInstruction = `You are RentPi Assistant, a professional and direct AI for the RentPi rental marketplace.
-Rules:
-1. NO GREETINGS OR FILLER. Start answering immediately.
-2. Be concise and factual. Use product names, prices, and categories from the data.
-3. ONLY answer questions related to RentPi (products, rentals, availability, pricing, trends).
-4. If the data contains a list of matching products, list them with name, category, and price per day.
-5. Never reveal internal system notes or JSON keys to the user.
-6. If no data is available, say so plainly.`;
+const systemInstruction = `You are RentPi Assistant, a direct AI assistant for the RentPi rental marketplace.
+CRITICAL RULES:
+1. NEVER output raw JSON, data keys, brackets, or any structured data format. ALWAYS convert data into plain English sentences.
+2. NO GREETINGS OR FILLER. Start answering immediately.
+3. Be concise and factual. Pull product names, categories, and prices from the data and mention them naturally.
+4. For product lists, format each as: "[Name] ([Category]) — $[Price]/day".
+5. ONLY answer questions related to RentPi. Refuse everything else.
+6. If data is unavailable, say so in one sentence.`;
 
 export function createChatHandler(genAI: GoogleGenerativeAI) {
   return async (req: Request, res: Response): Promise<any> => {
@@ -362,18 +362,18 @@ async function fetchJson(url: string, authorized = false) {
 
 function buildFinalPrompt(message: string, groundingData: unknown) {
   if (!groundingData) {
-    return `[NO DATA AVAILABLE]
-You have no grounding data. If the question requires factual data (prices, availability, stats), state that the data is currently unavailable. Do NOT guess.
+    return `No platform data is available for this request. Tell the user that data is currently unavailable for their question.
 
-User Question: ${message}`;
+User question: ${message}`;
   }
 
-  return `[REAL PLATFORM DATA]
-${JSON.stringify(groundingData, null, 2)}
-[END OF DATA]
+  return `Here is the data retrieved from the RentPi platform for the user's question:
 
-Using ONLY the data above, answer this question. Mention product names, categories, and prices where available:
-${message}`;
+${JSON.stringify(groundingData, null, 2)}
+
+IMPORTANT: Convert the above data into a clear, plain-English response. Do NOT output any JSON, keys, brackets, or raw data. Summarize naturally using product names, categories, and prices.
+
+User question: ${message}`;
 }
 
 async function generateReply(genAI: GoogleGenerativeAI, history: any[], finalPrompt: string) {
