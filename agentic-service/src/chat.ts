@@ -7,6 +7,7 @@ import { fetchWithCache } from "./fetchWithCache";
 type IntentParams = {
   intent: "availability" | "peak" | "surge" | "trending" | "discount" | "category" | "none";
   productId?: number;
+  productName?: string;
   userId?: number;
   from?: string;
   to?: string;
@@ -101,7 +102,7 @@ async function extractParams(genAI: GoogleGenerativeAI, message: string): Promis
 Today's date is ${today()}.
 Respond ONLY with JSON. No markdown formatting.
 Format:
-- Product availability: {"intent": "availability", "productId": 123, "from": "YYYY-MM-DD", "to": "YYYY-MM-DD"} (Omit productId if not mentioned)
+- Product availability: {"intent": "availability", "productId": 123, "productName": "name", "from": "YYYY-MM-DD", "to": "YYYY-MM-DD"} (Omit productId/productName if not mentioned)
 - Peak period: {"intent": "peak", "from": "YYYY-MM", "to": "YYYY-MM"}
 - Surge days: {"intent": "surge", "month": "YYYY-MM"}
 - Trending: {"intent": "trending", "date": "YYYY-MM-DD"}
@@ -176,16 +177,46 @@ async function loadGroundingData(params: IntentParams) {
 }
 
 async function fetchAvailability(params: IntentParams) {
-  if (!params.productId) {
+  let productId = params.productId;
+  let productInfo: any = null;
+
+  // Attempt to resolve name to ID if ID is missing
+  if (!productId && params.productName) {
+    const searchUrl = `${config.ANALYTICS_SERVICE_URL}/analytics/search?q=${encodeURIComponent(params.productName)}`;
+    const searchResp = await fetchWithCache(searchUrl);
+    if (searchResp.ok) {
+      const searchData = await searchResp.json();
+      if (searchData.results && searchData.results.length > 0) {
+        productInfo = searchData.results[0];
+        productId = productInfo.id;
+      }
+    }
+  }
+
+  if (!productId) {
     return {
-      system_note: "The user did not provide a valid product ID. Ask them for the product ID so you can check availability.",
+      system_note: "The user did not provide a valid product ID or the name could not be resolved. Ask them for the product ID so you can check availability.",
     };
+  }
+
+  // Fetch product info if we don't have it yet
+  if (!productInfo) {
+    const infoUrl = `${config.RENTAL_SERVICE_URL}/rentals/products/${productId}`;
+    const infoResp = await fetchWithCache(infoUrl);
+    if (infoResp.ok) {
+      productInfo = await infoResp.json();
+    }
   }
 
   const from = params.from || "2024-01-01";
   const to = params.to || "2024-12-31";
-  const url = `${config.RENTAL_SERVICE_URL}/rentals/products/${params.productId}/availability?from=${from}&to=${to}`;
-  return fetchJson(url);
+  const availabilityUrl = `${config.RENTAL_SERVICE_URL}/rentals/products/${productId}/availability?from=${from}&to=${to}`;
+  const availability = await fetchJson(availabilityUrl);
+
+  return {
+    product: productInfo,
+    availability: availability
+  };
 }
 
 async function fetchDiscount(params: IntentParams) {

@@ -200,3 +200,15 @@ analyticsRoute.get("/analytics/recommendations", async (c) => {
 
   return c.json({ date, recommendations });
 });
+
+analyticsRoute.get("/analytics/search", (c) => {
+  const q = c.req.query("q")?.toLowerCase();
+  if (!q) return c.json({ error: "query q is required" }, 400);
+
+  const results = Array.from(getCache().productById.values())
+    .filter((p) => p.name.toLowerCase().includes(q))
+    .slice(0, 10);
+
+  return c.json({ query: q, results });
+});
+
