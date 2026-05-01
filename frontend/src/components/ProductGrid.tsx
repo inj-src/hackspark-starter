@@ -110,7 +110,7 @@ const ProductGrid: React.FC = () => {
                 <p className="text-gray-500 dark:text-slate-400 text-sm mb-4 line-clamp-2 flex-grow">{product.description}</p>
 
                 <motion.button
-                  onClick={() => navigate(`/products/${product.id}`)}
+                  onClick={() => navigate(`/rent/${product.id}`)}
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
                   className="w-full bg-green-500/10 dark:bg-green-500/20 text-green-600 dark:text-green-400 hover:bg-green-500 hover:text-white dark:hover:bg-green-500 dark:hover:text-white py-2.5 rounded-xl font-medium transition-colors"
