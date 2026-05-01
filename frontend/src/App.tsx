@@ -12,7 +12,6 @@ import { clearStoredToken, getStoredToken, meRequest } from './lib/auth';
 import Home from './pages/Home';
 import ProductDetails from './pages/ProductDetails';
 import Rent from './pages/Rent';
-import Buy from './pages/Buy';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Header from './components/Header';
@@ -60,7 +59,6 @@ function Layout() {
           <Routes location={location} key={location.pathname}>
             <Route path="/" element={<Home />} />
             <Route path="/rent" element={<Rent />} />
-            <Route path="/buy" element={<Buy />} />
             <Route path="/rent/:id" element={<ProductDetails />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />

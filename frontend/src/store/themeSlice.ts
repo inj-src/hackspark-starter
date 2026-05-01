@@ -8,7 +8,7 @@ const savedTheme = localStorage.getItem('rentpi-theme');
 const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 
 const initialState: ThemeState = {
-  isDark: savedTheme ? savedTheme === 'dark' : prefersDark,
+  isDark: savedTheme ? savedTheme === 'dark' : false,
 };
 
 const themeSlice = createSlice({

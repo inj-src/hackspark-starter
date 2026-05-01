@@ -27,7 +27,7 @@ const Header: React.FC = () => {
           <nav className="hidden md:flex space-x-8">
             <Link to="/" className="text-gray-600 dark:text-slate-300 hover:text-green-500 dark:hover:text-green-400 font-medium transition-colors">Home</Link>
             <Link to="/rent" className="text-gray-600 dark:text-slate-300 hover:text-green-500 dark:hover:text-green-400 font-medium transition-colors">Rent</Link>
-            <Link to="/buy" className="text-gray-600 dark:text-slate-300 hover:text-green-500 dark:hover:text-green-400 font-medium transition-colors">Buy</Link>
+            <Link to="/register" className="text-gray-600 dark:text-slate-300 hover:text-green-500 dark:hover:text-green-400 font-medium transition-colors">Register</Link>
             <Link to="/" className="text-gray-600 dark:text-slate-300 hover:text-green-500 dark:hover:text-green-400 font-medium transition-colors">Community</Link>
           </nav>
 
@@ -128,7 +128,7 @@ const Header: React.FC = () => {
             <div className="px-4 pt-2 pb-4 space-y-1 flex flex-col">
               <Link to="/" onClick={() => setIsMenuOpen(false)} className="block px-3 py-2 text-base font-medium text-gray-800 dark:text-slate-200 hover:text-green-500 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-md">Home</Link>
               <Link to="/rent" onClick={() => setIsMenuOpen(false)} className="block px-3 py-2 text-base font-medium text-gray-800 dark:text-slate-200 hover:text-green-500 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-md">Rent</Link>
-              <Link to="/buy" onClick={() => setIsMenuOpen(false)} className="block px-3 py-2 text-base font-medium text-gray-800 dark:text-slate-200 hover:text-green-500 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-md">Buy</Link>
+              <Link to="/register" onClick={() => setIsMenuOpen(false)} className="block px-3 py-2 text-base font-medium text-gray-800 dark:text-slate-200 hover:text-green-500 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-md">Register</Link>
               <Link to="/" onClick={() => setIsMenuOpen(false)} className="block px-3 py-2 text-base font-medium text-gray-800 dark:text-slate-200 hover:text-green-500 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-md">Community</Link>
               <div className="mt-3 flex flex-col gap-2 px-3">
                 <Link to="/login" onClick={() => setIsMenuOpen(false)} className="w-full text-center text-gray-600 dark:text-slate-300 hover:text-green-500 font-medium py-2 border border-gray-200 dark:border-slate-700 rounded-md">Login</Link>
