@@ -62,13 +62,45 @@ async function fetchWithCache(url: string, options: any = {}) {
   }
 
   console.log(`[Cache Miss] ${url}`);
-  const resp = await fetch(url, options);
-  if (resp.ok) {
-    const data = await resp.json();
-    memoryCache.set(cacheKey, { timestamp: Date.now(), data });
-    return { ok: true, json: async () => data };
+  let attempt = 0;
+  const maxRetries = 3;
+  let lastRetryAfter = 72;
+
+  while (attempt <= maxRetries) {
+    const resp = await fetch(url, options);
+    
+    if (resp.status === 429) {
+      if (attempt === maxRetries) {
+        throw { message: "429_EXHAUSTED", lastRetryAfter };
+      }
+      
+      let retryAfterSeconds = 10;
+      try {
+        const body = await resp.json();
+        retryAfterSeconds = body.retryAfterSeconds || 10;
+      } catch(e) {}
+      
+      lastRetryAfter = retryAfterSeconds;
+      
+      let backoff = retryAfterSeconds * Math.pow(2, attempt);
+      const jitter = backoff * 0.2;
+      backoff = backoff + (Math.random() * 2 * jitter - jitter);
+      
+      console.log(`[retry ${attempt + 1}/${maxRetries}] waiting ${Math.round(backoff)}s before retrying GET ${url}`);
+      
+      await new Promise(resolve => setTimeout(resolve, backoff * 1000));
+      attempt++;
+      continue;
+    }
+    
+    if (resp.ok) {
+      const data = await resp.json();
+      memoryCache.set(cacheKey, { timestamp: Date.now(), data });
+      return { ok: true, json: async () => data };
+    }
+    return resp;
   }
-  return resp;
+  return { ok: false, json: async () => ({}) };
 }
 
 // Keywords guard
@@ -121,46 +153,76 @@ app.post('/chat', async (req: Request, res: Response): Promise<any> => {
 
     // Step 3: Intent & Grounding Data
     let groundingData: any = null;
-    const lowerMessage = message.toLowerCase();
+    let params: any = { intent: "none" };
     
     try {
-      if (lowerMessage.includes("category") || lowerMessage.includes("most rented") || lowerMessage.includes("category stats")) {
+        const extractorPrompt = `Extract API parameters from this message: "${message}". 
+Today's date is ${new Date().toISOString().split('T')[0]}.
+Respond ONLY with JSON. No markdown formatting.
+Format:
+- Product availability: {"intent": "availability", "productId": 1, "from": "YYYY-MM-DD", "to": "YYYY-MM-DD"}
+- Peak period: {"intent": "peak", "from": "YYYY-MM", "to": "YYYY-MM"}
+- Surge days: {"intent": "surge", "month": "YYYY-MM"}
+- Trending: {"intent": "trending", "date": "YYYY-MM-DD"}
+- Discount/User: {"intent": "discount", "userId": 1}
+- Category stats: {"intent": "category"}
+- Otherwise: {"intent": "none"}
+Make sure dates are strictly formatted.`;
+
+        const extModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const extResult = await extModel.generateContent(extractorPrompt);
+        params = JSON.parse(extResult.response.text().trim().replace(/```json|```/gi, ''));
+    } catch(e) {
+        console.error("Param extraction failed, fallback to keyword", e);
+        const lowerMessage = message.toLowerCase();
+        if (lowerMessage.includes("category")) params.intent = "category";
+        else if (lowerMessage.includes("available")) params = { intent: "availability", productId: 1, from: "2024-01-01", to: "2024-12-31" };
+        else if (lowerMessage.includes("trending")) params = { intent: "trending", date: new Date().toISOString().split('T')[0] };
+        else if (lowerMessage.includes("surge")) params = { intent: "surge", month: new Date().toISOString().substring(0, 7) };
+        else if (lowerMessage.includes("peak")) params = { intent: "peak", from: "2024-01", to: "2024-06" };
+        else if (lowerMessage.includes("discount")) params = { intent: "discount", userId: 1 };
+    }
+
+    try {
+      if (params.intent === "category") {
         const url = `${CENTRAL_API_URL}/api/data/rentals/stats?group_by=category`;
         const resp = await fetchWithCache(url, { headers: { 'Authorization': `Bearer ${CENTRAL_API_TOKEN}` } });
         if (resp.ok) groundingData = await resp.json();
       } 
-      else if (lowerMessage.includes("available") || lowerMessage.includes("availability") || lowerMessage.includes("book") || lowerMessage.includes("free")) {
-        const match = message.match(/\b\d+\b/);
-        const productId = match ? match[0] : 1;
-        const url = `${RENTAL_SERVICE_URL}/rentals/products/${productId}/availability?from=2024-01-01&to=2024-12-31`;
+      else if (params.intent === "availability") {
+        // Space for future gRPC implementation with rental-service
+        const url = `${RENTAL_SERVICE_URL}/rentals/products/${params.productId || 1}/availability?from=${params.from || '2024-01-01'}&to=${params.to || '2024-12-31'}`;
         const resp = await fetchWithCache(url);
         if (resp.ok) groundingData = await resp.json();
       }
-      else if (lowerMessage.includes("trending") || lowerMessage.includes("recommend") || lowerMessage.includes("season") || lowerMessage.includes("right now")) {
-        const today = new Date().toISOString().split('T')[0];
-        const url = `${ANALYTICS_SERVICE_URL}/analytics/recommendations?date=${today}&limit=5`;
+      else if (params.intent === "trending") {
+        const url = `${ANALYTICS_SERVICE_URL}/analytics/recommendations?date=${params.date || new Date().toISOString().split('T')[0]}&limit=5`;
         const resp = await fetchWithCache(url);
         if (resp.ok) groundingData = await resp.json();
       }
-      else if (lowerMessage.includes("surge") || lowerMessage.includes("spike") || lowerMessage.includes("surge day")) {
-        const month = new Date().toISOString().substring(0, 7);
-        const url = `${ANALYTICS_SERVICE_URL}/analytics/surge-days?month=${month}`;
+      else if (params.intent === "surge") {
+        const url = `${ANALYTICS_SERVICE_URL}/analytics/surge-days?month=${params.month || new Date().toISOString().substring(0, 7)}`;
         const resp = await fetchWithCache(url);
         if (resp.ok) groundingData = await resp.json();
       }
-      else if (lowerMessage.includes("peak") || lowerMessage.includes("busiest week") || lowerMessage.includes("7 day") || lowerMessage.includes("rush")) {
-        const url = `${ANALYTICS_SERVICE_URL}/analytics/peak-window?from=2024-01&to=2024-06`;
+      else if (params.intent === "peak") {
+        const url = `${ANALYTICS_SERVICE_URL}/analytics/peak-window?from=${params.from || '2024-01'}&to=${params.to || '2024-06'}`;
         const resp = await fetchWithCache(url);
         if (resp.ok) groundingData = await resp.json();
       }
-      else if (lowerMessage.includes("discount") || lowerMessage.includes("security score") || lowerMessage.includes("loyalty")) {
-        const match = message.match(/\b\d+\b/);
-        const userId = match ? match[0] : 1; 
-        const url = `${CENTRAL_API_URL}/api/data/users/${userId}`;
+      else if (params.intent === "discount") {
+        const url = `${CENTRAL_API_URL}/api/data/users/${params.userId || 1}`;
         const resp = await fetchWithCache(url, { headers: { 'Authorization': `Bearer ${CENTRAL_API_TOKEN}` } });
         if (resp.ok) groundingData = await resp.json();
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (err.message === "429_EXHAUSTED") {
+        return res.status(503).json({
+          error: "Central API unavailable after 3 retries",
+          lastRetryAfter: err.lastRetryAfter,
+          suggestion: "Try again in ~2 minutes"
+        });
+      }
       console.error("Error fetching grounding data", err);
       groundingData = null;
     }
