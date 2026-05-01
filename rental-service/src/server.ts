@@ -14,7 +14,7 @@ app.route("/", statusRoute);
 app.route("/", availabilityRoute);
 
 const port = Number(process.env.PORT ?? 8002);
-const cacheDir = process.env.RENTAL_CACHE_DIR ?? path.join(process.cwd(), "cache");
+const cacheDir = process.env.RENTAL_CACHE_DIR ?? path.join(process.cwd(), "..", "cache");
 
 const setup = {
   runtime: await createScraperRuntime(cacheDir),
