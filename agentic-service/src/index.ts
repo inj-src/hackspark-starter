@@ -240,8 +240,13 @@ Keep answers concise and helpful.`;
 ${JSON.stringify(groundingData, null, 2)}
 [END OF DATA]
 
-Using only the data above, answer this question:
+Using ONLY the data above, answer this question. Do not invent details not present in the data:
 ${message}`;
+    } else {
+      finalPrompt = `[NO DATA AVAILABLE]
+You currently have NO grounding data for this request. If the user's question requires factual data from the platform (like prices, availability, stats, categories, etc.), you MUST explicitly state that the data is currently unavailable. Do NOT guess or invent numbers.
+
+User Question: ${message}`;
     }
 
     // Step 5: Call Gemini
@@ -249,7 +254,8 @@ ${message}`;
     try {
       const model = genAI.getGenerativeModel({ 
         model: "gemini-2.5-flash",
-        systemInstruction
+        systemInstruction,
+        generationConfig: { temperature: 0.1 }
       });
       
       const chat = model.startChat({
